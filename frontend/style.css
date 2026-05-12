@@ -1,0 +1,41 @@
+/* 极致黑暗背景 */
+#particles-js {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: #000000;
+    background-image: radial-gradient(circle at center, #0a0a0a 0%, #000000 100%);
+    z-index: 1;
+}
+
+/* 隐藏滚动条但保留功能 */
+::-webkit-scrollbar {
+    width: 4px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #2d3748;
+    border-radius: 10px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    main {
+        overflow-y: auto;
+        height: auto;
+    }
+    #particles-js {
+        position: fixed;
+    }
+}
+
+/* 卡片入场动画 */
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
