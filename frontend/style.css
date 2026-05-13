@@ -1,10 +1,8 @@
-/* 粒子背景层：置底并固定 */
+/* 背景粒子层 */
 #particles-js {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
     background: #000;
     background-image: radial-gradient(circle at center, #0a1128 0%, #000000 100%);
     z-index: 0;
@@ -12,24 +10,27 @@
 
 /* 玻璃拟态卡片 */
 .card-glass {
-    background: rgba(15, 23, 42, 0.7);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(25px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 24px;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .card-glass:hover {
-    border-color: rgba(59, 130, 246, 0.3);
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.1);
 }
 
-/* 消息气泡样式 */
+/* 消息气泡 */
 .bot-msg {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 1rem;
+    padding: 1.2rem;
     border-radius: 0 1.5rem 1.5rem 1.5rem;
     align-self: flex-start;
     max-width: 90%;
+    font-size: 0.95rem;
+    line-height: 1.6;
 }
 
 .user-msg {
@@ -40,21 +41,33 @@
     margin-left: auto;
     max-width: 85%;
     box-shadow: 0 10px 20px -10px rgba(37, 99, 235, 0.5);
+    font-size: 0.95rem;
 }
 
-/* 滚动条美化 */
-.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+/* 滚动条 */
+.custom-scrollbar::-webkit-scrollbar { width: 5px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.3); border-radius: 10px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(59, 130, 246, 0.5); }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(59, 130, 246, 0.6); }
 
-/* Markdown 渲染修正 */
-.markdown-body table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
-.markdown-body th, .markdown-body td { border: 1px solid rgba(255,255,255,0.1); padding: 8px; }
-.katex-display { overflow-x: auto; overflow-y: hidden; padding: 10px 0; }
+/* Markdown & 公式修正 */
+.markdown-body table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+.markdown-body th, .markdown-body td { border: 1px solid rgba(255,255,255,0.1); padding: 10px; text-align: left; }
+.markdown-body th { background: rgba(255,255,255,0.05); }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
+/* 防止长公式撑破容器 */
+.katex-display { 
+    overflow-x: auto; 
+    overflow-y: hidden; 
+    padding: 10px 0;
+    -webkit-overflow-scrolling: touch;
+}
+
+.animate-in {
+    animation: slideIn 0.4s ease-out forwards;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(15px); }
     to { opacity: 1; transform: translateY(0); }
 }
-.animate-in { animation: fadeIn 0.4s ease-out forwards; }

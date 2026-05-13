@@ -1,13 +1,13 @@
-// 1. 初始化高级粒子效果
+// 1. 初始化粒子背景
 particlesJS("particles-js", {
     "particles": {
-        "number": { "value": 100, "density": { "enable": true, "value_area": 800 } },
+        "number": { "value": 80, "density": { "enable": true, "value_area": 800 } },
         "color": { "value": "#3b82f6" },
         "shape": { "type": "circle" },
-        "opacity": { "value": 0.5, "random": true, "anim": { "enable": true, "speed": 1, "opacity_min": 0.1, "sync": false } },
+        "opacity": { "value": 0.4, "random": true },
         "size": { "value": 2, "random": true },
-        "line_linked": { "enable": true, "distance": 150, "color": "#2563eb", "opacity": 0.3, "width": 1 },
-        "move": { "enable": true, "speed": 1.2, "direction": "none", "random": true, "out_mode": "out" }
+        "line_linked": { "enable": true, "distance": 150, "color": "#2563eb", "opacity": 0.2, "width": 1 },
+        "move": { "enable": true, "speed": 1.5, "direction": "none", "random": true, "out_mode": "out" }
     },
     "interactivity": {
         "detect_on": "canvas",
@@ -16,14 +16,26 @@ particlesJS("particles-js", {
     "retina_detect": true
 });
 
-// 初始化图标
 lucide.createIcons();
-
-// 配置 Markdown 解析器
 marked.setOptions({ gfm: true, breaks: true });
 
-// ！！！请替换为你的 Hugging Face 后端地址 ！！！
-const API_URL = 'https://yuangitlab-mechanical-ai-api.hf.space/api/chat';
+// --- 核心配置：请替换为你自己的 Hugging Face 地址 ---
+const API_URL = 'https://你的用户名-你的项目名.hf.space/api/chat';
+
+// 渲染数学公式的公共函数
+function renderMath(element) {
+    if (typeof renderMathInElement === 'function') {
+        renderMathInElement(element, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false},
+                {left: '\\(', right: '\\)', display: false},
+                {left: '\\[', right: '\\]', display: true}
+            ],
+            throwOnError: false
+        });
+    }
+}
 
 async function sendMessage() {
     const input = document.getElementById('user-input');
@@ -33,7 +45,7 @@ async function sendMessage() {
     appendMessage('user', text);
     input.value = '';
     
-    const loadingId = appendMessage('bot', `<div class="flex gap-2 items-center"><div class="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>教授正在思考...</div>`);
+    const loadingId = appendMessage('bot', `<div class="flex gap-2 items-center"><div class="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>教授正在逻辑推演...</div>`);
 
     try {
         const response = await fetch(API_URL, {
@@ -44,34 +56,31 @@ async function sendMessage() {
         
         const data = await response.json();
 
-        // 1. 左侧回复
-        updateMessage(loadingId, data.chat_response);
+        // 1. 更新左侧聊天 (支持公式渲染)
+        const botMsgEl = document.getElementById(loadingId);
+        botMsgEl.innerHTML = marked.parse(data.chat_response || "");
+        renderMath(botMsgEl);
 
-        // 2. 右侧诊断渲染 (Markdown + LaTeX)
+        // 2. 更新右侧诊断 (Markdown + LaTeX)
         const diagEl = document.getElementById('diagnosis-content');
         diagEl.innerHTML = marked.parse(data.diagnosis || "未生成诊断数据");
+        renderMath(diagEl);
         
-        renderMathInElement(diagEl, {
-            delimiters: [
-                {left: '$$', right: '$$', display: true},
-                {left: '$', right: '$', display: false}
-            ],
-            throwOnError: false
-        });
-        
-        // 自动回到诊断卡片顶部
+        // 自动回到诊断顶部
         document.getElementById('diag-scroll-container').scrollTop = 0;
 
         // 3. 渲染题库
         if(data.quiz) renderQuiz(data.quiz);
         
         // 4. 渲染计划
+        const planEl = document.getElementById('plan-container');
         if(data.study_plan) {
-            document.getElementById('plan-container').innerHTML = marked.parse(data.study_plan);
+            planEl.innerHTML = marked.parse(data.study_plan);
+            renderMath(planEl);
         }
 
     } catch (error) {
-        updateMessage(loadingId, '网络异常，请检查后端是否开启。');
+        updateMessage(loadingId, '连接导师失败，请确认后端已正常运行。');
         console.error(error);
     }
 }
@@ -91,22 +100,35 @@ function renderQuiz(quizzes) {
             </div>
         </div>
     `).join('');
+    // 题库里的数学公式也要渲染
+    renderMath(container);
 }
 
 function checkAnswer(btn, correct, analysis) {
     const isCorrect = btn.innerText.trim().startsWith(correct);
     btn.classList.add(isCorrect ? '!bg-green-600/40' : '!bg-red-600/40');
+    
+    // 如果已经有解析了就不重复添加
+    if (btn.parentElement.querySelector('.quiz-feedback')) return;
+
     const feedback = document.createElement('div');
-    feedback.className = 'mt-3 text-[10px] text-slate-400 border-t border-white/5 pt-2 animate-in';
-    feedback.innerText = analysis;
+    feedback.className = 'quiz-feedback mt-3 text-[10px] text-slate-400 border-t border-white/5 pt-2 animate-in';
+    feedback.innerHTML = marked.parse(analysis);
     btn.parentElement.appendChild(feedback);
+    renderMath(feedback);
 }
 
 function appendMessage(role, text) {
     const id = 'msg-' + Date.now();
     const chatContainer = document.getElementById('chat-container');
     const msgClass = role === 'user' ? 'user-msg' : 'bot-msg';
-    chatContainer.innerHTML += `<div id="${id}" class="${msgClass} animate-in text-sm text-slate-200">${text}</div>`;
+    
+    const msgDiv = document.createElement('div');
+    msgDiv.id = id;
+    msgDiv.className = `${msgClass} animate-in`;
+    msgDiv.innerText = text; // 用户输入先存纯文本
+    
+    chatContainer.appendChild(msgDiv);
     chatContainer.scrollTop = chatContainer.scrollHeight;
     lucide.createIcons();
     return id;
@@ -116,3 +138,8 @@ function updateMessage(id, text) {
     const el = document.getElementById(id);
     if(el) el.innerHTML = text;
 }
+
+// 绑定回车键
+document.getElementById('user-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') sendMessage();
+});
