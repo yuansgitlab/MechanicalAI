@@ -20,7 +20,7 @@ lucide.createIcons();
 marked.setOptions({ gfm: true, breaks: true });
 
 // --- 核心配置：请替换为你自己的 Hugging Face 地址 ---
-const API_URL = 'https://你的用户名-你的项目名.hf.space/api/chat';
+const API_URL = 'https://yuangitlab-mechanical-ai-api.hf.space/api/chat';
 
 // 渲染数学公式的公共函数
 function renderMath(element) {
