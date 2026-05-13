@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -15,7 +15,7 @@
 
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-black text-slate-200 overflow-hidden font-sans">
+<body class="bg-black text-slate-200 overflow-x-hidden font-sans">
     <div id="particles-js"></div>
 
     <main class="relative z-10 flex flex-col md:flex-row h-screen p-4 gap-4 max-w-[1600px] mx-auto">
@@ -27,7 +27,7 @@
                         <i data-lucide="cpu" class="text-white w-6 h-6"></i>
                     </div>
                     <div>
-                        <h1 class="font-bold text-lg tracking-tight">智学领航</h1>
+                        <h1 class="font-bold text-lg tracking-tight text-white">智学领航</h1>
                         <p class="text-[10px] text-blue-400 uppercase tracking-widest">Engineering AI v2.0</p>
                     </div>
                 </div>
@@ -37,7 +37,7 @@
             </header>
             
             <div id="chat-container" class="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
-                <div class="bot-msg animate-in">
+                <div class="bot-msg">
                     同学你好，我是你的工科导师。无论是**控制工程**的频域分析，还是**机械设计**的强度校核，尽管提问。
                 </div>
             </div>
@@ -46,27 +46,30 @@
                 <div class="relative group">
                     <input id="user-input" type="text" 
                            placeholder="描述你的盲区，例如：解释拉氏变换的物理意义..." 
-                           class="w-full bg-black/50 border border-white/10 rounded-2xl pl-5 pr-14 py-4 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-slate-600">
+                           class="w-full bg-black/50 border border-white/10 rounded-2xl pl-5 pr-14 py-4 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-slate-600 text-white">
                     <button onclick="sendMessage()" class="absolute right-2 top-2 bottom-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all flex items-center group-hover:scale-105">
                         <i data-lucide="send" class="w-5 h-5"></i>
                     </button>
                 </div>
             </footer>
         </section>
-<section class="flex-1 md:flex-[0.65] flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
+        <section class="flex-1 md:flex-[0.65] flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2 pb-10">
             
-            <div class="card-glass border-l-4 border-blue-500 p-8 min-h-[200px]">
-                <div class="flex items-center gap-2 mb-6">
+            <div class="card-glass border-l-4 border-blue-500 flex flex-col h-[550px] shrink-0">
+                <div class="p-6 border-b border-white/5 flex items-center gap-2 shrink-0">
                     <i data-lucide="microscope" class="text-blue-400 w-5 h-5"></i>
                     <h3 class="text-sm font-bold uppercase tracking-widest text-blue-400">知识深度诊断</h3>
                 </div>
-                <div id="diagnosis-content" class="markdown-body prose prose-invert max-w-none text-slate-300 leading-relaxed">
-                    请在左侧输入你想攻克的知识点，我将为你拆解本质逻辑。
+                
+                <div id="diag-scroll-container" class="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                    <div id="diagnosis-content" class="markdown-body prose prose-invert max-w-none text-slate-300 leading-relaxed">
+                        请在左侧输入你想攻克的知识点，我将为你拆解本质逻辑。
+                    </div>
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div class="card-glass p-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 shrink-0">
+                <div class="card-glass p-6 min-h-[350px]">
                     <div class="flex items-center gap-2 mb-6">
                         <i data-lucide="swords" class="text-orange-400 w-5 h-5"></i>
                         <h3 class="text-sm font-bold uppercase tracking-widest text-orange-400">智能闯关测试</h3>
@@ -76,7 +79,7 @@
                     </div>
                 </div>
 
-                <div class="card-glass p-6">
+                <div class="card-glass p-6 min-h-[350px]">
                     <div class="flex items-center gap-2 mb-6">
                         <i data-lucide="calendar-range" class="text-emerald-400 w-5 h-5"></i>
                         <h3 class="text-sm font-bold uppercase tracking-widest text-emerald-400">个性化规划</h3>
