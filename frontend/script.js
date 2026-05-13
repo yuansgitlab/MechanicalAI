@@ -20,7 +20,7 @@ async function sendMessage() {
 
     try {
         // 等待部署后端后，将此处替换为 HuggingFace 地址
-        const response = await fetch('YOUR_BACKEND_URL/api/chat', {
+        const response = await fetch('https://yuangitlab-mechanical-ai-api.hf.space/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: text })
