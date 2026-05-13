@@ -23,7 +23,7 @@ lucide.createIcons();
 marked.setOptions({ gfm: true, breaks: true });
 
 // ！！！请替换为你的 Hugging Face 后端地址 ！！！
-const API_URL = 'https://你的用户名-你的项目名.hf.space/api/chat';
+const API_URL = 'https://yuangitlab-mechanical-ai-api.hf.space/api/chat';
 
 async function sendMessage() {
     const input = document.getElementById('user-input');
