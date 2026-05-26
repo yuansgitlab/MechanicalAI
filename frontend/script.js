@@ -18,9 +18,11 @@ particlesJS("particles-js", {
 
 lucide.createIcons();
 marked.setOptions({ gfm: true, breaks: true });
-
-// --- 核心配置：请替换为你自己的 Hugging Face 地址 ---
 const API_URL = 'https://yuangitlab-mechanical-ai-api.hf.space/api/chat';
+
+// 对话历史管理
+const chatHistory = [];
+const MAX_HISTORY_LENGTH = 20; // 最多保存20条历史消息
 
 // 渲染数学公式的公共函数
 function renderMath(element) {
@@ -29,10 +31,28 @@ function renderMath(element) {
             delimiters: [
                 {left: '$$', right: '$$', display: true},
                 {left: '$', right: '$', display: false},
+                {left: '\\[', right: '\\]', display: true},
                 {left: '\\(', right: '\\)', display: false},
-                {left: '\\[', right: '\\]', display: true}
+                {left: '[', right: ']', display: true}
             ],
-            throwOnError: false
+            throwOnError: false,
+            trust: true
+        });
+    } else if (typeof katex !== 'undefined') {
+        // 备用方案：手动处理 $$ 包裹的公式
+        const html = element.innerHTML;
+        element.innerHTML = html.replace(/\$\$([\s\S]+?)\$\$/g, function(match, formula) {
+            try {
+                return katex.renderToString(formula.trim(), { displayMode: true, throwOnError: false });
+            } catch (e) {
+                return match;
+            }
+        }).replace(/\$([\s\S]+?)\$/g, function(match, formula) {
+            try {
+                return katex.renderToString(formula.trim(), { displayMode: false, throwOnError: false });
+            } catch (e) {
+                return match;
+            }
         });
     }
 }
@@ -45,20 +65,38 @@ async function sendMessage() {
     appendMessage('user', text);
     input.value = '';
     
-    const loadingId = appendMessage('bot', `<div class="flex gap-2 items-center"><div class="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>教授正在逻辑推演...</div>`);
+    const loadingId = appendMessage('bot', `<div class="flex gap-2 items-center"><div class="w-2 h-2 bg-purple-600 rounded-full animate-bounce"></div>教授正在思考...</div>`);
 
     try {
+        // 构建包含历史对话的请求
+        const requestData = {
+            message: text,
+            history: chatHistory.slice(0)
+        };
+        
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text })
+            body: JSON.stringify(requestData)
         });
         
         const data = await response.json();
 
+        // 保存用户消息到历史
+        chatHistory.push({ role: 'user', content: text });
+        
+        // 保存AI回复到历史
+        const botResponse = data.chat_response || "";
+        chatHistory.push({ role: 'assistant', content: botResponse });
+        
+        // 限制历史记录长度
+        if (chatHistory.length > MAX_HISTORY_LENGTH) {
+            chatHistory.shift(); // 移除最老的消息
+        }
+
         // 1. 更新左侧聊天 (支持公式渲染)
         const botMsgEl = document.getElementById(loadingId);
-        botMsgEl.innerHTML = marked.parse(data.chat_response || "");
+        botMsgEl.innerHTML = marked.parse(botResponse);
         renderMath(botMsgEl);
 
         // 2. 更新右侧诊断 (Markdown + LaTeX)

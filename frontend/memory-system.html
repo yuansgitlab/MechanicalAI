@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MechanicalAI AI记忆系统 - 强大的对话记忆和知识管理">
+    <title>AI记忆系统 - MechanicalAI</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-black text-slate-200 font-sans antialiased">
+    <div id="particles-js"></div>
+
+    <nav class="navbar" id="navbar">
+        <div class="navbar-content">
+            <a href="index.html" class="logo">
+                <div class="logo-icon">
+                    <i data-lucide="cpu" class="text-white w-5 h-5" aria-hidden="true"></i>
+                </div>
+                <span class="logo-text">MechanicalAI</span>
+            </a>
+
+            <ul class="nav-links">
+                <li><a href="index.html">首页</a></li>
+                <li><a href="chat.html">智能对话</a></li>
+                <li><a href="question-bank.html">个人题库</a></li>
+                <li><a href="study-plans.html">学习规划</a></li>
+                <li><a href="memory-system.html" class="active">AI记忆</a></li>
+            </ul>
+
+            <div class="nav-actions">
+                <a href="chat.html" class="btn btn-primary">
+                    <i data-lucide="sparkles" class="w-4 h-4" aria-hidden="true"></i>
+                    开始对话
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="relative z-10 pt-28 pb-20">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-white mb-2">
+                    <i data-lucide="brain-circuit" class="w-8 h-8 inline mr-2 text-purple-500"></i>
+                    AI记忆系统
+                </h1>
+                <p class="text-slate-400">管理你的长期记忆、知识图谱和用户画像</p>
+            </div>
+
+            <!-- 统计卡片 -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="glass-card p-6">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                            <i data-lucide="library" class="w-5 h-5 text-blue-400"></i>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-white" id="knowledge-count">0</p>
+                            <p class="text-xs text-slate-400">知识条目</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card p-6">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                            <i data-lucide="bookmark" class="w-5 h-5 text-purple-400"></i>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-white" id="bookmark-count">0</p>
+                            <p class="text-xs text-slate-400">书签消息</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card p-6">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
+                            <i data-lucide="file-text" class="w-5 h-5 text-green-400"></i>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-white" id="summary-count">0</p>
+                            <p class="text-xs text-slate-400">对话摘要</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card p-6">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-10 h-10 rounded-lg bg-yellow-500/20 flex items-center justify-center">
+                            <i data-lucide="user" class="w-5 h-5 text-yellow-400"></i>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-white" id="profile-level">初级</p>
+                            <p class="text-xs text-slate-400">技术等级</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 标签页导航 -->
+            <div class="flex gap-2 mb-6 border-b border-white/10 pb-4">
+                <button class="px-4 py-2 rounded-lg bg-purple-600/30 text-purple-300 border border-purple-500/30" data-tab="knowledge" onclick="switchTab('knowledge')">
+                    <i data-lucide="database" class="w-4 h-4 inline mr-2"></i>知识库
+                </button>
+                <button class="px-4 py-2 rounded-lg bg-white/10 text-slate-400" data-tab="bookmarks" onclick="switchTab('bookmarks')">
+                    <i data-lucide="bookmark" class="w-4 h-4 inline mr-2"></i>书签
+                </button>
+                <button class="px-4 py-2 rounded-lg bg-white/10 text-slate-400" data-tab="summaries" onclick="switchTab('summaries')">
+                    <i data-lucide="file-text" class="w-4 h-4 inline mr-2"></i>摘要
+                </button>
+                <button class="px-4 py-2 rounded-lg bg-white/10 text-slate-400" data-tab="profile" onclick="switchTab('profile')">
+                    <i data-lucide="user" class="w-4 h-4 inline mr-2"></i>用户画像
+                </button>
+            </div>
+
+            <!-- 知识库标签页 -->
+            <div id="tab-knowledge" class="tab-content">
+                <div class="glass-card p-6 mb-6">
+                    <div class="flex flex-wrap gap-4 items-center mb-4">
+                        <input type="text" id="knowledge-search" placeholder="搜索知识..." class="form-input flex-1" oninput="searchKnowledge(this.value)">
+                        <select id="knowledge-filter" class="form-input" onchange="filterKnowledge(this.value)">
+                            <option value="">所有分类</option>
+                            <option value="数学">数学</option>
+                            <option value="物理">物理</option>
+                            <option value="控制工程">控制工程</option>
+                            <option value="机械设计">机械设计</option>
+                            <option value="电子电路">电子电路</option>
+                        </select>
+                        <button onclick="exportAllMemory()" class="btn btn-secondary">
+                            <i data-lucide="download" class="w-4 h-4 mr-2"></i>导出记忆
+                        </button>
+                    </div>
+                </div>
+
+                <div id="knowledge-list" class="space-y-4">
+                    <!-- 知识项动态加载 -->
+                </div>
+
+                <div id="knowledge-empty" class="hidden text-center py-12">
+                    <i data-lucide="inbox" class="w-16 h-16 mx-auto mb-4 text-slate-500"></i>
+                    <h3 class="text-xl font-semibold mb-2">知识库为空</h3>
+                    <p class="text-slate-400">开始对话后，AI会自动提取和保存知识</p>
+                </div>
+            </div>
+
+            <!-- 书签标签页 -->
+            <div id="tab-bookmarks" class="tab-content hidden">
+                <div id="bookmarks-list" class="space-y-4">
+                    <!-- 书签动态加载 -->
+                </div>
+
+                <div id="bookmarks-empty" class="hidden text-center py-12">
+                    <i data-lucide="bookmark" class="w-16 h-16 mx-auto mb-4 text-slate-500"></i>
+                    <h3 class="text-xl font-semibold mb-2">没有书签</h3>
+                    <p class="text-slate-400">在对话中点击书签按钮来保存重要内容</p>
+                </div>
+            </div>
+
+            <!-- 摘要标签页 -->
+            <div id="tab-summaries" class="tab-content hidden">
+                <div id="summaries-list" class="space-y-4">
+                    <!-- 摘要动态加载 -->
+                </div>
+
+                <div id="summaries-empty" class="hidden text-center py-12">
+                    <i data-lucide="file-text" class="w-16 h-16 mx-auto mb-4 text-slate-500"></i>
+                    <h3 class="text-xl font-semibold mb-2">没有摘要</h3>
+                    <p class="text-slate-400">进行对话后会自动生成摘要</p>
+                </div>
+            </div>
+
+            <!-- 用户画像标签页 -->
+            <div id="tab-profile" class="tab-content hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="glass-card p-6">
+                        <h3 class="text-lg font-semibold mb-4 flex items-center">
+                            <i data-lucide="activity" class="w-5 h-5 mr-2 text-purple-400"></i>学习行为分析
+                        </h3>
+                        <div id="profile-metrics" class="space-y-4">
+                            <!-- 动态加载 -->
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-6">
+                        <h3 class="text-lg font-semibold mb-4 flex items-center">
+                            <i data-lucide="trending-up" class="w-5 h-5 mr-2 text-green-400"></i>学习进度
+                        </h3>
+                        <div id="progress-metrics" class="space-y-4">
+                            <!-- 动态加载 -->
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-6 md:col-span-2">
+                        <h3 class="text-lg font-semibold mb-4 flex items-center">
+                            <i data-lucide="lightbulb" class="w-5 h-5 mr-2 text-yellow-400"></i>探索的主题
+                        </h3>
+                        <div id="topics-list" class="flex flex-wrap gap-2">
+                            <!-- 动态加载 -->
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-6 md:col-span-2">
+                        <h3 class="text-lg font-semibold mb-4 flex items-center">
+                            <i data-lucide="settings" class="w-5 h-5 mr-2 text-blue-400"></i>偏好设置
+                        </h3>
+                        <div id="preferences-form" class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm text-slate-400 mb-2">解释详细程度</label>
+                                    <select id="pref-detail" class="form-input" onchange="savePreference('detailLevel', this.value)">
+                                        <option value="simple">简洁</option>
+                                        <option value="medium" selected>适中</option>
+                                        <option value="detailed">详细</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-slate-400 mb-2">技术难度</label>
+                                    <select id="pref-difficulty" class="form-input" onchange="savePreference('difficulty', this.value)">
+                                        <option value="beginner">入门</option>
+                                        <option value="intermediate" selected>中级</option>
+                                        <option value="advanced">高级</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm text-slate-400 mb-2">是否使用公式</label>
+                                <select id="pref-formulas" class="form-input" onchange="savePreference('useFormulas', this.value)">
+                                    <option value="yes" selected>是，尽可能多用</option>
+                                    <option value="sometimes">有时</option>
+                                    <option value="no">否，尽量少用</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <a href="index.html" class="logo">
+                    <div class="logo-icon">
+                        <i data-lucide="cpu" class="text-white w-5 h-5" aria-hidden="true"></i>
+                    </div>
+                    <span class="logo-text">MechanicalAI</span>
+                </a>
+                <p>新一代AI驱动的工科学习平台，让知识学习更智能、更高效、更有趣。</p>
+            </div>
+
+            <div>
+                <h4 class="footer-title">产品</h4>
+                <ul class="footer-links">
+                    <li><a href="chat.html">智能对话</a></li>
+                    <li><a href="tech.html">技术架构</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="footer-title">资源</h4>
+                <ul class="footer-links">
+                    <li><a href="discuss.html">讨论区</a></li>
+                    <li><a href="about.html">关于我们</a></li>
+                    <li><a href="help.html">帮助文档</a></li>
+                    <li><a href="privacy-policy.html">隐私政策</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="footer-title">联系方式</h4>
+                <ul class="footer-links">
+                    <li><a href="https://github.com/yuansgitlab/MechanicalAI" target="_blank">GitHub</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <p>&copy; 2026 MechanicalAI. All rights reserved.</p>
+            <div class="flex gap-6">
+                <a href="privacy-policy.html" class="hover:text-white transition-colors">隐私政策</a>
+                <a href="user-agreement.html" class="hover:text-white transition-colors">用户协议</a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="long-term-memory.js"></script>
+    <script>
+        let currentTab = 'knowledge';
+        let allKnowledge = [];
+        let allBookmarks = [];
+        let allSummaries = [];
+
+        // 初始化
+        async function initMemorySystem() {
+            try {
+                await ltm.init();
+                await updateStats();
+                await loadKnowledge();
+                await loadBookmarks();
+                await loadSummaries();
+                await loadProfile();
+                loadPreferences();
+            } catch (e) {
+                console.error('初始化失败:', e);
+            }
+        }
+
+        // 更新统计
+        async function updateStats() {
+            const stats = await ltm.getStats();
+            document.getElementById('knowledge-count').textContent = stats.knowledgeCount;
+            document.getElementById('bookmark-count').textContent = stats.bookmarkCount;
+            document.getElementById('summary-count').textContent = stats.summaryCount;
+            
+            if (stats.profile && stats.profile.learningHistory) {
+                document.getElementById('profile-level').textContent = 
+                    stats.profile.learningHistory.style?.technicalLevel || '初级';
+            }
+        }
+
+        // 加载知识
+        async function loadKnowledge() {
+            allKnowledge = await ltm.getAllFromStore(ltm.stores.knowledge);
+            renderKnowledge(allKnowledge);
+        }
+
+        // 渲染知识列表
+        function renderKnowledge(items) {
+            const list = document.getElementById('knowledge-list');
+            const empty = document.getElementById('knowledge-empty');
+            
+            if (items.length === 0) {
+                list.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            
+            empty.classList.add('hidden');
+            
+            list.innerHTML = items.map(item => `
+                <div class="glass-card p-4">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs px-2 py-1 rounded-full bg-purple-600/30 text-purple-300 border border-purple-500/30">
+                                ${item.category || '未分类'}
+                            </span>
+                            <span class="text-xs text-slate-500">
+                                ${new Date(item.timestamp).toLocaleDateString('zh-CN')}
+                            </span>
+                        </div>
+                        <button onclick="deleteKnowledge('${item.id}')" class="text-slate-400 hover:text-red-400">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <p class="text-slate-200 mb-2">${item.content}</p>
+                    <div class="text-xs text-slate-500">
+                        相关度: ${(item.relevance * 100).toFixed(0)}% | 访问: ${item.accessCount || 0}次
+                    </div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        // 搜索知识
+        function searchKnowledge(query) {
+            const filtered = allKnowledge.filter(k => 
+                k.content.toLowerCase().includes(query.toLowerCase())
+            );
+            renderKnowledge(filtered);
+        }
+
+        // 筛选知识
+        function filterKnowledge(category) {
+            const filtered = category ? 
+                allKnowledge.filter(k => k.category === category) : 
+                allKnowledge;
+            renderKnowledge(filtered);
+        }
+
+        // 删除知识
+        async function deleteKnowledge(id) {
+            if (confirm('确定要删除这条知识吗?')) {
+                await ltm.deleteFromStore(ltm.stores.knowledge, id);
+                await loadKnowledge();
+                await updateStats();
+            }
+        }
+
+        // 加载书签
+        async function loadBookmarks() {
+            allBookmarks = await ltm.getBookmarkedMessages();
+            renderBookmarks(allBookmarks);
+        }
+
+        // 渲染书签
+        function renderBookmarks(items) {
+            const list = document.getElementById('bookmarks-list');
+            const empty = document.getElementById('bookmarks-empty');
+            
+            if (items.length === 0) {
+                list.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            
+            empty.classList.add('hidden');
+            
+            list.innerHTML = items.map(item => `
+                <div class="glass-card p-4">
+                    <div class="flex items-start justify-between mb-2">
+                        <span class="text-xs text-slate-500">
+                            ${new Date(item.timestamp).toLocaleString('zh-CN')}
+                        </span>
+                        <button onclick="deleteBookmark('${item.id}')" class="text-slate-400 hover:text-red-400">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <p class="text-slate-200">${item.content}</p>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        // 删除书签
+        async function deleteBookmark(id) {
+            if (confirm('确定要删除这个书签吗?')) {
+                await ltm.deleteFromStore(ltm.stores.bookmarks, id);
+                await loadBookmarks();
+                await updateStats();
+            }
+        }
+
+        // 加载摘要
+        async function loadSummaries() {
+            allSummaries = await ltm.getAllFromStore(ltm.stores.summaries);
+            renderSummaries(allSummaries);
+        }
+
+        // 渲染摘要
+        function renderSummaries(items) {
+            const list = document.getElementById('summaries-list');
+            const empty = document.getElementById('summaries-empty');
+            
+            if (items.length === 0) {
+                list.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            
+            empty.classList.add('hidden');
+            
+            list.innerHTML = items.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map(item => `
+                <div class="glass-card p-4">
+                    <div class="flex items-start justify-between mb-3">
+                        <span class="text-sm font-semibold text-purple-400">
+                            ${new Date(item.timestamp).toLocaleDateString('zh-CN')}
+                        </span>
+                        <button onclick="deleteSummary('${item.id}')" class="text-slate-400 hover:text-red-400">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <span class="text-sm text-slate-500">主题: </span>
+                        <span class="text-sm text-slate-200">
+                            ${item.topics && item.topics.length > 0 ? item.topics.join(', ') : '未记录'}
+                        </span>
+                    </div>
+                    
+                    ${item.keyInsights && item.keyInsights.length > 0 ? `
+                        <div class="mb-3">
+                            <span class="text-sm text-slate-500">关键见解: </span>
+                            <ul class="mt-1 ml-4 space-y-1">
+                                ${item.keyInsights.slice(0, 3).map(insight => `
+                                    <li class="text-sm text-slate-300">• ${insight}</li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="text-xs text-slate-500">
+                        ${item.questionCount}个问题，共${item.messageCount}条消息
+                    </div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        // 删除摘要
+        async function deleteSummary(id) {
+            if (confirm('确定要删除这个摘要吗?')) {
+                await ltm.deleteFromStore(ltm.stores.summaries, id);
+                await loadSummaries();
+                await updateStats();
+            }
+        }
+
+        // 加载用户画像
+        async function loadProfile() {
+            const profile = await ltm.getProfile();
+            const metrics = document.getElementById('profile-metrics');
+            const progress = document.getElementById('progress-metrics');
+            const topics = document.getElementById('topics-list');
+            
+            if (!profile.learningHistory) {
+                metrics.innerHTML = `
+                    <p class="text-slate-400">开始对话后这里会显示你的学习行为分析</p>
+                `;
+                progress.innerHTML = `
+                    <p class="text-slate-400">学习进度会在这里展示</p>
+                `;
+                topics.innerHTML = `
+                    <p class="text-slate-400">探索的主题会在这里展示</p>
+                `;
+                return;
+            }
+            
+            const style = profile.learningHistory.style || {};
+            const prog = profile.learningHistory.progress || {};
+            const topicsList = profile.learningHistory.topics || [];
+            
+            metrics.innerHTML = `
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">消息长度</span>
+                        <span class="text-slate-200">${style.messageLength || '未记录'}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">技术水平</span>
+                        <span class="text-slate-200">${style.technicalLevel || '未记录'}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">提问频率</span>
+                        <span class="text-slate-200">${((style.questionFrequency || 0) * 100).toFixed(0)}%</span>
+                    </div>
+                </div>
+            `;
+            
+            progress.innerHTML = `
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">回答数</span>
+                        <span class="text-slate-200">${prog.questionsAnswered || 0}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">主题数</span>
+                        <span class="text-slate-200">${prog.topicsExplored || 0}</span>
+                    </div>
+                </div>
+            `;
+            
+            if (topicsList.length > 0) {
+                topics.innerHTML = topicsList.map(topic => `
+                    <span class="px-3 py-1 rounded-full bg-purple-600/20 text-purple-300 border border-purple-500/30">
+                        ${topic}
+                    </span>
+                `).join('');
+            } else {
+                topics.innerHTML = `<p class="text-slate-400">还没有探索的主题</p>`;
+            }
+        }
+
+        // 加载偏好
+        async function loadPreferences() {
+            const detail = await ltm.getPreference('detailLevel', 'medium');
+            const difficulty = await ltm.getPreference('difficulty', 'intermediate');
+            const formulas = await ltm.getPreference('useFormulas', 'yes');
+            
+            document.getElementById('pref-detail').value = detail;
+            document.getElementById('pref-difficulty').value = difficulty;
+            document.getElementById('pref-formulas').value = formulas;
+        }
+
+        // 保存偏好
+        async function savePreference(key, value) {
+            try {
+                await ltm.setPreference(key, value);
+                showToast('偏好已保存', 'success');
+            } catch (e) {
+                console.error('保存失败:', e);
+                showToast('保存失败', 'error');
+            }
+        }
+
+        // 导出所有记忆
+        async function exportAllMemory() {
+            try {
+                const data = await ltm.exportMemory();
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `MechanicalAI_Memory_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                console.error('导出失败:', e);
+                showToast('导出失败', 'error');
+            }
+        }
+
+        // 切换标签页
+        function switchTab(tabName) {
+            currentTab = tabName;
+            
+            document.querySelectorAll('[data-tab]').forEach(btn => {
+                if (btn.dataset.tab === tabName) {
+                    btn.classList.remove('bg-white/10', 'text-slate-400');
+                    btn.classList.add('bg-purple-600/30', 'text-purple-300', 'border', 'border-purple-500/30');
+                } else {
+                    btn.classList.remove('bg-purple-600/30', 'text-purple-300', 'border', 'border-purple-500/30');
+                    btn.classList.add('bg-white/10', 'text-slate-400');
+                }
+            });
+            
+            document.querySelectorAll('.tab-content').forEach(el => {
+                el.classList.add('hidden');
+            });
+            
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+        }
+
+        // 显示提示
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `fixed top-4 right-4 px-6 py-3 rounded-lg z-50 animate-in ${
+                type === 'success' ? 'bg-green-600' :
+                type === 'error' ? 'bg-red-600' :
+                'bg-blue-600'
+            } text-white`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // 初始化
+        lucide.createIcons();
+        initMemorySystem();
+        
+        window.addEventListener('scroll', () => {
+            const navbar = document.getElementById('navbar');
+            navbar.classList.toggle('scrolled', window.scrollY > 50);
+        });
+    </script>
+</body>
+</html>

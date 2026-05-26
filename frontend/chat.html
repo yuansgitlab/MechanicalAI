@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MechanicalAI 智能对话 - 与AI工科导师实时交流，获得专业知识解答">
+    <meta name="theme-color" content="#0a0a0a">
+    <title>智能对话 - MechanicalAI</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-black text-slate-200 font-sans antialiased overflow-hidden">
+    <div id="particles-js"></div>
+
+    <nav class="navbar scrolled" id="navbar">
+        <div class="navbar-content">
+            <a href="index.html" class="logo">
+                <div class="logo-icon">
+                    <i data-lucide="cpu" class="text-white w-5 h-5" aria-hidden="true"></i>
+                </div>
+                <span class="logo-text">MechanicalAI</span>
+            </a>
+
+            <ul class="nav-links">
+                <li><a href="index.html">首页</a></li>
+                <li><a href="chat.html" class="active">智能对话</a></li>
+                <li><a href="question-bank.html">个人题库</a></li>
+                <li><a href="study-plans.html">学习规划</a></li>
+                <li><a href="memory-system.html">AI记忆</a></li>
+            </ul>
+
+            <div class="nav-actions">
+                <a href="chat.html" class="btn btn-primary">
+                    <i data-lucide="sparkles" class="w-4 h-4" aria-hidden="true"></i>
+                    开始使用
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="chat-layout relative z-10">
+        <div class="chat-main">
+            <!-- 历史会话侧边栏 -->
+            <aside class="chat-sidebar flex flex-col">
+                <header class="chat-sidebar-header flex-shrink-0">
+                    <div class="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl flex items-center justify-center shadow-lg glow-purple">
+                        <i data-lucide="cpu" class="text-white w-5 h-5" aria-hidden="true"></i>
+                    </div>
+                    <div class="flex-1">
+                        <h1 class="font-bold text-lg tracking-tight text-white">智学领航</h1>
+                        <p class="text-xs text-purple-400 uppercase tracking-widest">Engineering AI</p>
+                    </div>
+                    <div class="ml-auto flex items-center gap-2">
+                        <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                    </div>
+                </header>
+
+                <!-- 新建对话按钮 -->
+                <div class="p-3 border-b border-white/5 flex-shrink-0">
+                    <button id="new-chat-btn" onclick="startNewChat()" class="w-full btn btn-primary text-sm flex items-center justify-center gap-2">
+                        <i data-lucide="plus" class="w-4 h-4" aria-hidden="true"></i>
+                        新建对话
+                    </button>
+                </div>
+
+                <!-- 历史会话列表 -->
+                <div id="chat-history-list" class="flex-1 overflow-y-auto custom-scrollbar">
+                    <div class="p-3 space-y-2">
+                        <div class="text-xs text-slate-500 uppercase tracking-wider mb-3 px-2">历史记录</div>
+                        <div id="history-items" class="space-y-1">
+                            <!-- 动态加载历史会话 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 存储管理 -->
+                <div class="p-3 border-t border-white/5 flex-shrink-0">
+                    <div class="flex gap-2">
+                        <button onclick="showStorageInfo()" class="btn btn-ghost text-xs flex-1" title="存储信息">
+                            <i data-lucide="database" class="w-4 h-4" aria-hidden="true"></i>
+                        </button>
+                        <button onclick="exportHistory()" class="btn btn-ghost text-xs flex-1" title="导出记录">
+                            <i data-lucide="download" class="w-4 h-4" aria-hidden="true"></i>
+                        </button>
+                        <button onclick="confirmClearHistory()" class="btn btn-ghost text-xs flex-1 text-red-400 hover:text-red-300" title="清空历史">
+                            <i data-lucide="trash-2" class="w-4 h-4" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <div class="chat-main-right">
+                <!-- 聊天内容区域 -->
+                <section class="chat-content flex flex-col">
+                    <!-- 顶部工具栏 -->
+                    <div class="flex items-center justify-between mb-4 px-2">
+                        <div class="flex items-center gap-2">
+                            <h2 id="current-chat-title" class="text-lg font-semibold text-white">新对话</h2>
+                            <button onclick="renameCurrentChat()" class="btn btn-ghost text-xs" title="重命名">
+                                <i data-lucide="edit-2" class="w-4 h-4" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div id="chat-status" class="text-xs text-slate-500">
+                            <span id="message-count">0 条消息</span>
+                        </div>
+                    </div>
+
+                    <!-- 消息容器 -->
+                    <div id="chat-container" class="flex-1 overflow-y-auto custom-scrollbar space-y-6 bg-neutral-900/30 rounded-2xl p-6">
+                        <!-- 欢迎消息 -->
+                        <div class="bot-msg">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="w-8 h-8 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center">
+                                    <i data-lucide="bot" class="text-white w-4 h-4" aria-hidden="true"></i>
+                                </div>
+                                <span class="font-semibold text-white">MechanicalAI 导师</span>
+                            </div>
+                            同学你好，我是你的工科导师。无论是<span class="text-purple-400">控制工程</span>的频域分析，还是<span class="text-pink-400">机械设计</span>的强度校核，尽管提问。
+                        </div>
+                    </div>
+
+                    <!-- 输入区域 -->
+                    <footer class="mt-4">
+                        <div class="chat-input-wrapper">
+                            <textarea id="user-input" type="text" 
+                                   placeholder="描述你的盲区，例如：解释拉氏变换的物理意义..." 
+                                   class="chat-input resize-none"
+                                   rows="2"
+                                   autocomplete="off"></textarea>
+                            <button id="send-btn" onclick="sendMessage()" class="chat-send-btn" aria-label="发送消息">
+                                <i data-lucide="send" class="w-5 h-5" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <p class="text-xs text-slate-600 mt-2 text-center">按 Enter 发送，Shift+Enter 换行</p>
+                    </footer>
+                </section>
+
+                <!-- 诊断面板区域 -->
+                <section class="diagnosis-section flex flex-col gap-4 mt-4">
+                <div class="glass-card border-l-4 border-l-purple-500 flex flex-col h-[200px] shrink-0">
+                    <div class="p-4 border-b border-white/5 flex items-center gap-2 shrink-0">
+                        <i data-lucide="microscope" class="text-purple-400 w-5 h-5" aria-hidden="true"></i>
+                        <h3 class="text-sm font-bold uppercase tracking-widest text-purple-400">知识诊断报告</h3>
+                    </div>
+                    <div id="diag-scroll-container" class="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                        <div id="diagnosis-content" class="prose prose-invert max-w-none text-slate-300 text-sm">
+                            <div class="flex flex-col items-center justify-center h-full text-center">
+                                <i data-lucide="brain" class="text-purple-400 w-8 h-8 mb-2" aria-hidden="true"></i>
+                                <p class="text-slate-500">等待诊断...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card flex flex-col h-[200px]">
+                    <div class="p-4 border-b border-white/5 flex items-center gap-2 shrink-0">
+                        <i data-lucide="target" class="text-orange-400 w-5 h-5" aria-hidden="true"></i>
+                        <h3 class="text-sm font-bold uppercase tracking-widest text-orange-400">闯关测试</h3>
+                    </div>
+                    <div id="quiz-container" class="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-3">
+                        <div class="flex flex-col items-center justify-center h-full text-center">
+                            <i data-lucide="swords" class="text-orange-400 w-8 h-8 mb-2" aria-hidden="true"></i>
+                            <p class="text-slate-500 text-sm">完成诊断后生成</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card flex flex-col h-[200px]">
+                    <div class="p-4 border-b border-white/5 flex items-center gap-2 shrink-0">
+                        <i data-lucide="calendar-check" class="text-emerald-400 w-5 h-5" aria-hidden="true"></i>
+                        <h3 class="text-sm font-bold uppercase tracking-widest text-emerald-400">学习计划</h3>
+                    </div>
+                    <div id="plan-container" class="flex-1 overflow-y-auto p-4 custom-scrollbar text-sm text-slate-300">
+                        <div class="flex flex-col items-center justify-center h-full text-center">
+                            <i data-lucide="calendar-range" class="text-emerald-400 w-8 h-8 mb-2" aria-hidden="true"></i>
+                            <p class="text-slate-500 text-sm">等待生成...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- 模态框 -->
+    <div id="modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-card max-w-md w-full p-6">
+            <h3 id="modal-title" class="text-xl font-bold mb-4"></h3>
+            <div id="modal-content"></div>
+            <div id="modal-actions" class="flex gap-3 mt-6 justify-end"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script src="chat-history.js"></script>
+    <script>
+        let currentSession = null;
+        let isInitialized = false;
+
+        // 初始化
+        async function initChat() {
+            try {
+                await chatHistory.init();
+                await loadHistoryList();
+                await startNewChat();
+                isInitialized = true;
+            } catch (e) {
+                console.error('Init error:', e);
+                alert('初始化失败：' + e.message);
+            }
+        }
+
+        // 加载历史列表
+        async function loadHistoryList() {
+            try {
+                const sessions = await chatHistory.getAllSessions();
+                const container = document.getElementById('history-items');
+                
+                if (sessions.length === 0) {
+                    container.innerHTML = '<p class="text-xs text-slate-600 text-center py-4">暂无历史记录</p>';
+                    return;
+                }
+
+                container.innerHTML = sessions.map(session => `
+                    <div class="history-item ${currentSession && currentSession.id === session.id ? 'active' : ''}" 
+                         data-id="${session.id}"
+                         onclick="loadSession('${session.id}')">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="message-circle" class="w-4 h-4 text-slate-500 flex-shrink-0" aria-hidden="true"></i>
+                            <div class="flex-1 min-w-0">
+                                <div class="text-sm font-medium text-white truncate">${session.title}</div>
+                                <div class="text-xs text-slate-500 truncate">${session.preview || '新对话'}</div>
+                            </div>
+                            <button onclick="event.stopPropagation(); deleteSession('${session.id}')" 
+                                    class="btn btn-ghost p-1 text-slate-500 hover:text-red-400">
+                                <i data-lucide="trash-2" class="w-3 h-3" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+                lucide.createIcons();
+            } catch (e) {
+                console.error('Load history error:', e);
+            }
+        }
+
+        // 新建对话
+        async function startNewChat() {
+            try {
+                const session = await chatHistory.createSession();
+                currentSession = session;
+                
+                // 清空UI
+                clearChatUI();
+                updateChatTitle(session.title);
+                updateMessageCount(0);
+                await loadHistoryList();
+            } catch (e) {
+                console.error('New chat error:', e);
+            }
+        }
+
+        // 加载会话
+        async function loadSession(sessionId) {
+            try {
+                const session = await chatHistory.getSession(sessionId);
+                if (!session) return;
+
+                currentSession = session;
+                clearChatUI();
+                updateChatTitle(session.title);
+                updateMessageCount(session.messages.length);
+
+                // 渲染消息
+                session.messages.forEach(msg => {
+                    appendMessage(msg.role, msg.content, false);
+                });
+
+                // 渲染诊断
+                if (session.diagnosis) {
+                    document.getElementById('diagnosis-content').innerHTML = marked.parse(session.diagnosis);
+                    renderMath(document.getElementById('diagnosis-content'));
+                }
+
+                // 渲染题目
+                if (session.quiz && session.quiz.length > 0) {
+                    renderQuiz(session.quiz);
+                }
+
+                // 渲染计划
+                if (session.studyPlan) {
+                    document.getElementById('plan-container').innerHTML = marked.parse(session.studyPlan);
+                    renderMath(document.getElementById('plan-container'));
+                }
+
+                await loadHistoryList();
+                scrollToBottom();
+            } catch (e) {
+                console.error('Load session error:', e);
+            }
+        }
+
+        // 清空聊天UI
+        function clearChatUI() {
+            document.getElementById('chat-container').innerHTML = '';
+            document.getElementById('diagnosis-content').innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-center">
+                    <i data-lucide="brain" class="text-purple-400 w-8 h-8 mb-2" aria-hidden="true"></i>
+                    <p class="text-slate-500">等待诊断...</p>
+                </div>
+            `;
+            document.getElementById('quiz-container').innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-center">
+                    <i data-lucide="swords" class="text-orange-400 w-8 h-8 mb-2" aria-hidden="true"></i>
+                    <p class="text-slate-500 text-sm">完成诊断后生成</p>
+                </div>
+            `;
+            document.getElementById('plan-container').innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-center">
+                    <i data-lucide="calendar-range" class="text-emerald-400 w-8 h-8 mb-2" aria-hidden="true"></i>
+                    <p class="text-slate-500 text-sm">等待生成...</p>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        // 更新标题
+        function updateChatTitle(title) {
+            document.getElementById('current-chat-title').textContent = title;
+        }
+
+        // 更新消息计数
+        function updateMessageCount(count) {
+            document.getElementById('message-count').textContent = count + ' 条消息';
+        }
+
+        // 发送消息（重写）
+        async function sendMessage() {
+            const input = document.getElementById('user-input');
+            const text = input.value.trim();
+            if (!text || !currentSession) return;
+
+            // 保存用户消息
+            const userMessage = { role: 'user', content: text };
+            currentSession.messages.push(userMessage);
+            
+            appendMessage('user', text);
+            input.value = '';
+            updateMessageCount(currentSession.messages.length);
+            await chatHistory.saveSession(currentSession);
+
+            // 显示加载状态 - 直接创建元素，不使用 appendMessage
+            const loadingId = 'loading-' + Date.now();
+            const chatContainer = document.getElementById('chat-container');
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = loadingId;
+            loadingDiv.className = 'bot-msg animate-in';
+            loadingDiv.innerHTML = `
+                <div class="flex gap-2 items-center">
+                    <div class="w-2 h-2 bg-purple-600 rounded-full animate-bounce"></div>
+                    <span>教授正在思考...</span>
+                </div>
+            `;
+            chatContainer.appendChild(loadingDiv);
+            scrollToBottom();
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status} ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                console.log('API response:', data);
+                console.log('Response keys:', Object.keys(data));
+
+                // 检查 API 返回的数据结构
+                if (!data) {
+                    throw new Error('Empty response from API');
+                }
+
+                // 更新助手消息
+                const botMsgEl = document.getElementById(loadingId);
+                if (!botMsgEl) {
+                    console.error('Bot message element not found:', loadingId);
+                    return;
+                }
+                
+                // 处理思考过程（DeepSeek API 返回的 reasoning/thinking）
+                let thinkingContent = '';
+                if (data.thinking || data.reasoning || data.thought) {
+                    const rawThinking = data.thinking || data.reasoning || data.thought;
+                    // 将思考过程转换为 Markdown 格式（处理代码块等）
+                    thinkingContent = marked.parse(rawThinking);
+                }
+
+                const chatResponse = data.chat_response || data.response || data.content || data.result || '';
+                
+                // 构建完整的消息内容（思考过程 + 主响应）
+                let fullContent = '';
+                if (thinkingContent) {
+                    fullContent = `<div class="thinking-block mb-4 p-3 bg-purple-900/20 rounded-lg border border-purple-500/30">
+                        <div class="text-xs text-purple-400 font-semibold mb-2 flex items-center gap-2">
+                            <span>🤔</span> 思考过程
+                        </div>
+                        <div class="text-sm text-slate-300">${thinkingContent}</div>
+                    </div>`;
+                }
+                fullContent += chatResponse;
+
+                // 检测是否是 HTML 内容
+                if (fullContent.trim().startsWith('<')) {
+                    botMsgEl.innerHTML = fullContent;
+                } else {
+                    botMsgEl.innerHTML = marked.parse(fullContent);
+                }
+                console.log('Rendering math in bot message...');
+                renderMath(botMsgEl);
+
+                // 保存助手消息
+                currentSession.messages.push({ role: 'assistant', content: chatResponse });
+
+                // 更新诊断
+                if (data.diagnosis) {
+                    currentSession.diagnosis = data.diagnosis;
+                    const diagContent = data.diagnosis.trim().startsWith('<') 
+                        ? data.diagnosis 
+                        : marked.parse(data.diagnosis);
+                    document.getElementById('diagnosis-content').innerHTML = diagContent;
+                    console.log('Rendering math in diagnosis...');
+                    renderMath(document.getElementById('diagnosis-content'));
+                }
+
+                // 更新题目
+                if (data.quiz) {
+                    currentSession.quiz = data.quiz;
+                    renderQuiz(data.quiz);
+                }
+
+                // 更新计划
+                if (data.study_plan) {
+                    currentSession.studyPlan = data.study_plan;
+                    const planContent = data.study_plan.trim().startsWith('<')
+                        ? data.study_plan
+                        : marked.parse(data.study_plan);
+                    document.getElementById('plan-container').innerHTML = planContent;
+                    console.log('Rendering math in plan...');
+                    renderMath(document.getElementById('plan-container'));
+                }
+
+                // 更新会话标题
+                if (currentSession.messages.length === 2) {
+                    currentSession.title = text.substring(0, 30) + (text.length > 30 ? '...' : '');
+                    updateChatTitle(currentSession.title);
+                }
+
+                await chatHistory.saveSession(currentSession);
+                await loadHistoryList();
+
+            } catch (error) {
+                console.error('Error in sendMessage:', error);
+                const botMsgEl = document.getElementById(loadingId);
+                if (botMsgEl) {
+                    botMsgEl.innerHTML = `<span class="text-red-400">连接导师失败: ${error.message}</span>`;
+                }
+            }
+        }
+
+        // 渲染数学公式的公共函数
+        function renderMath(element) {
+            console.log('renderMath called, element:', element);
+            console.log('renderMathInElement available:', typeof renderMathInElement === 'function');
+            
+            // 等待 KaTeX 加载
+            if (typeof renderMathInElement === 'function') {
+                try {
+                    renderMathInElement(element, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false},
+                            {left: '\\[', right: '\\]', display: true},
+                            {left: '\\(', right: '\\)', display: false},
+                            {left: '[', right: ']', display: true}
+                        ],
+                        throwOnError: false,
+                        trust: true
+                    });
+                    console.log('renderMathInElement executed successfully');
+                } catch (e) {
+                    console.error('KaTeX render error:', e);
+                }
+            } else {
+                console.warn('renderMathInElement not available, KaTeX may not be loaded');
+            }
+        }
+
+        // 追加消息
+        function appendMessage(role, text, shouldSave = true) {
+            const id = 'msg-' + Date.now();
+            const chatContainer = document.getElementById('chat-container');
+            
+            const msgDiv = document.createElement('div');
+            msgDiv.id = id;
+            
+            if (role === 'user') {
+                msgDiv.className = 'user-msg animate-in';
+                msgDiv.textContent = text;
+                if (shouldSave && currentSession) {
+                    currentSession.messages.push({ role: 'user', content: text });
+                }
+            } else {
+                msgDiv.className = 'bot-msg animate-in';
+                // 如果 text 已经是 HTML，直接使用，否则用 marked 解析
+                if (text.startsWith('<')) {
+                    msgDiv.innerHTML = text;
+                } else {
+                    msgDiv.innerHTML = marked.parse(text);
+                }
+                if (shouldSave && currentSession) {
+                    currentSession.messages.push({ role: 'assistant', content: text });
+                }
+                // 渲染公式
+                renderMath(msgDiv);
+            }
+            
+            chatContainer.appendChild(msgDiv);
+            scrollToBottom();
+            lucide.createIcons();
+            return id;
+        }
+
+        // 渲染题目
+        function renderQuiz(quizzes) {
+            const container = document.getElementById('quiz-container');
+            container.innerHTML = quizzes.map((q, idx) => {
+                // 映射难度到颜色
+                const difficultyColors = {
+                    '基础': 'bg-green-600/20 text-green-300 border-green-600/30',
+                    '进阶': 'bg-yellow-600/20 text-yellow-300 border-yellow-600/30',
+                    '挑战': 'bg-red-600/20 text-red-300 border-red-600/30'
+                };
+                const colorClass = difficultyColors[q.difficulty] || 'bg-purple-600/20 text-purple-300 border-purple-600/30';
+                
+                return `
+                    <div class="bg-white/5 p-4 rounded-2xl border border-white/5 animate-in">
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="font-bold text-orange-200 text-sm">Q${idx+1}: ${q.question}</p>
+                            ${q.difficulty ? `<span class="text-xs px-2 py-0.5 rounded-full border ${colorClass}">${q.difficulty}</span>` : ''}
+                        </div>
+                        <div class="grid grid-cols-1 gap-2">
+                            ${q.options.map(opt => `
+                                <button onclick="checkAnswer(this, '${q.answer}', '${q.analysis.replace(/'/g, "\\'")}')" 
+                                        class="text-left px-4 py-2 bg-black/30 hover:bg-blue-600/20 rounded-xl transition text-xs border border-white/5 text-slate-300">
+                                    ${opt}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            // 题库里的数学公式也要渲染
+            renderMath(container);
+        }
+
+        // 检查答案
+        function checkAnswer(btn, correct, analysis) {
+            const isCorrect = btn.innerText.trim().startsWith(correct);
+            btn.classList.add(isCorrect ? '!bg-green-600/40' : '!bg-red-600/40');
+            
+            // 如果已经有解析了就不重复添加
+            if (btn.parentElement.querySelector('.quiz-feedback')) return;
+
+            const feedback = document.createElement('div');
+            feedback.className = 'quiz-feedback mt-3 text-[10px] text-slate-400 border-t border-white/5 pt-2 animate-in';
+            feedback.innerHTML = marked.parse(analysis);
+            btn.parentElement.appendChild(feedback);
+            renderMath(feedback);
+        }
+
+        // 滚动到底部
+        function scrollToBottom() {
+            const container = document.getElementById('chat-container');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 删除会话
+        async function deleteSession(sessionId) {
+            if (!confirm('确定要删除这个对话吗？')) return;
+            
+            try {
+                await chatHistory.deleteSession(sessionId);
+                
+                if (currentSession && currentSession.id === sessionId) {
+                    await startNewChat();
+                } else {
+                    await loadHistoryList();
+                }
+            } catch (e) {
+                console.error('Delete error:', e);
+            }
+        }
+
+        // 重命名当前会话
+        async function renameCurrentChat() {
+            if (!currentSession) return;
+            
+            const newTitle = prompt('输入新的对话标题：', currentSession.title);
+            if (!newTitle || newTitle.trim() === currentSession.title) return;
+            
+            currentSession.title = newTitle.trim();
+            updateChatTitle(currentSession.title);
+            await chatHistory.saveSession(currentSession);
+            await loadHistoryList();
+        }
+
+        // 显示存储信息
+        async function showStorageInfo() {
+            const stats = await chatHistory.getStorageStats();
+            showModal('存储信息', `
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">会话数量</span>
+                        <span class="font-semibold">${stats.sessionCount}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">消息总数</span>
+                        <span class="font-semibold">${stats.totalMessages}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">存储使用</span>
+                        <span class="font-semibold">${stats.estimatedSizeFormatted}</span>
+                    </div>
+                </div>
+            `, [
+                { text: '关闭', onclick: hideModal }
+            ]);
+        }
+
+        // 导出历史
+        async function exportHistory() {
+            try {
+                await chatHistory.downloadExport();
+                showToast('导出成功！');
+            } catch (e) {
+                showToast('导出失败：' + e.message);
+            }
+        }
+
+        // 确认清空历史
+        function confirmClearHistory() {
+            showModal('清空历史', '<p class="text-slate-300">确定要清空所有对话历史吗？此操作不可恢复。</p>', [
+                { text: '取消', onclick: hideModal, primary: false },
+                { text: '清空', onclick: doClearHistory, primary: true, danger: true }
+            ]);
+        }
+
+        // 执行清空
+        async function doClearHistory() {
+            try {
+                await chatHistory.clearAllSessions();
+                hideModal();
+                await startNewChat();
+                showToast('历史已清空');
+            } catch (e) {
+                showToast('清空失败：' + e.message);
+            }
+        }
+
+        // 显示模态框
+        function showModal(title, content, actions) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-content').innerHTML = content;
+            
+            const actionsContainer = document.getElementById('modal-actions');
+            actionsContainer.innerHTML = actions.map(action => `
+                <button class="btn ${action.primary ? 'btn-primary' : 'btn-secondary'} ${action.danger ? 'bg-red-600 hover:bg-red-700' : ''}" onclick="${action.onclick.name}()">
+                    ${action.text}
+                </button>
+            `).join('');
+            
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        // 隐藏模态框
+        function hideModal() {
+            document.getElementById('modal').classList.add('hidden');
+        }
+
+        // 显示提示
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-4 right-4 bg-purple-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-in';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // 事件监听
+        document.addEventListener('DOMContentLoaded', function() {
+            initChat();
+            
+            document.getElementById('user-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        });
+
+        lucide.createIcons();
+
+        window.addEventListener('scroll', function() {
+            const navbar = document.getElementById('navbar');
+            if (window.scrollY > 50) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+
+        // 点击模态框背景关闭
+        document.getElementById('modal').addEventListener('click', function(e) {
+            if (e.target === this) hideModal();
+        });
+    </script>
+    <style>
+        .history-item {
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .history-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .history-item.active {
+            background: rgba(147, 51, 234, 0.2);
+            border-left: 3px solid #9333ea;
+        }
+        .history-item .btn {
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .history-item:hover .btn {
+            opacity: 1;
+        }
+    </style>
+</body>
+</html>

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MechanicalAI 帮助文档 - 完整的使用指南和常见问题解答">
+    <meta name="theme-color" content="#0a0a0a">
+    <title>帮助文档 - MechanicalAI</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-black text-slate-200 font-sans antialiased">
+    <div id="particles-js"></div>
+
+    <nav class="navbar" id="navbar">
+        <div class="navbar-content">
+            <a href="index.html" class="logo">
+                <div class="logo-icon">
+                    <i data-lucide="cpu" class="text-white w-5 h-5" aria-hidden="true"></i>
+                </div>
+                <span class="logo-text">MechanicalAI</span>
+            </a>
+
+            <ul class="nav-links">
+                <li><a href="index.html">首页</a></li>
+                <li><a href="chat.html">智能对话</a></li>
+                <li><a href="discuss.html">讨论区</a></li>
+                <li><a href="question-bank.html">个人题库</a></li>
+                <li><a href="study-plans.html">学习规划</a></li>
+                <li><a href="help.html">关于我们</a></li>
+            </ul>
+
+            <div class="nav-actions">
+                <a href="chat.html" class="btn btn-primary">
+                    <i data-lucide="sparkles" class="w-4 h-4" aria-hidden="true"></i>
+                    开始使用
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="relative z-10">
+        <section class="hero" style="min-height: 40vh; padding-top: 8rem;">
+            <div class="hero-badge">
+                <i data-lucide="book-open" class="w-4 h-4" aria-hidden="true"></i>
+                <span>帮助文档</span>
+            </div>
+
+            <h1 class="hero-title">
+                使用<span class="gradient-text">指南</span>
+            </h1>
+
+            <p class="hero-subtitle">
+                从入门到精通，完整了解 MechanicalAI 的功能和使用方法
+            </p>
+        </section>
+
+        <section class="features py-16">
+            <div class="features-container">
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    <!-- 侧边栏导航 -->
+                    <div class="lg:col-span-1">
+                        <div class="glass-card p-6 sticky top-24">
+                            <h3 class="font-bold text-lg mb-4">目录导航</h3>
+                            <ul class="space-y-3 text-slate-400">
+                                <li>
+                                    <a href="#getting-started" class="flex items-center gap-2 hover:text-white transition-colors">
+                                        <i data-lucide="arrow-right" class="w-4 h-4" aria-hidden="true"></i>
+                                        快速开始
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="#chat-guide" class="flex items-center gap-2 hover:text-white transition-colors">
+                                        <i data-lucide="arrow-right" class="w-4 h-4" aria-hidden="true"></i>
+                                        智能对话
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="#diagnosis" class="flex items-center gap-2 hover:text-white transition-colors">
+                                        <i data-lucide="arrow-right" class="w-4 h-4" aria-hidden="true"></i>
+                                        知识诊断
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="#quiz" class="flex items-center gap-2 hover:text-white transition-colors">
+                                        <i data-lucide="arrow-right" class="w-4 h-4" aria-hidden="true"></i>
+                                        闯关测试
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="#study-plan" class="flex items-center gap-2 hover:text-white transition-colors">
+                                        <i data-lucide="arrow-right" class="w-4 h-4" aria-hidden="true"></i>
+                                        学习计划
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="#discussion" class="flex items-center gap-2 hover:text-white transition-colors">
+                                        <i data-lucide="arrow-right" class="w-4 h-4" aria-hidden="true"></i>
+                                        讨论区使用
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="#faq" class="flex items-center gap-2 hover:text-white transition-colors">
+                                        <i data-lucide="arrow-right" class="w-4 h-4" aria-hidden="true"></i>
+                                        常见问题
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- 主要内容 -->
+                    <div class="lg:col-span-3 space-y-8">
+                        <article id="getting-started" class="glass-card p-8">
+                            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                                <i data-lucide="rocket" class="w-6 h-6 text-purple-400" aria-hidden="true"></i>
+                                快速开始
+                            </h2>
+                            <div class="space-y-4">
+                                <div class="p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                                    <h3 class="font-semibold text-lg mb-2 text-purple-400">第一步：开始对话</h3>
+                                    <p class="text-slate-400">
+                                        访问 <a href="chat.html" class="text-purple-400 hover:text-purple-300 underline">智能对话</a> 页面，在输入框中输入你想要了解的工科问题，然后点击发送按钮或按回车键。
+                                    </p>
+                                </div>
+                                <div class="p-4 bg-pink-500/10 border border-pink-500/30 rounded-lg">
+                                    <h3 class="font-semibold text-lg mb-2 text-pink-400">第二步：查看诊断报告</h3>
+                                    <p class="text-slate-400">
+                                        AI 回答后，右侧上方会显示详细的知识诊断报告，包含本质定义、直观理解和工程应用三个部分。
+                                    </p>
+                                </div>
+                                <div class="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                                    <h3 class="font-semibold text-lg mb-2 text-blue-400">第三步：做测试和制定计划</h3>
+                                    <p class="text-slate-400">
+                                        查看智能闯关测试题目来巩固知识，并根据 AI 生成的个性化学习计划进行系统学习。
+                                    </p>
+                                </div>
+                            </div>
+                        </article>
+
+                        <article id="chat-guide" class="glass-card p-8">
+                            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                                <i data-lucide="message-circle" class="w-6 h-6 text-purple-400" aria-hidden="true"></i>
+                                智能对话使用指南
+                            </h2>
+                            <div class="space-y-4">
+                                <h3 class="font-semibold text-lg mb-2">如何获得更好的回答？</h3>
+                                <ul class="space-y-2 text-slate-400 list-disc list-inside">
+                                    <li>尽可能具体地描述你的问题，而不是模糊的提问</li>
+                                    <li>说明你的学习阶段（如大一、大三、考研等），AI 会调整深度</li>
+                                    <li>询问具体概念的应用场景，帮助理解</li>
+                                    <li>让 AI 解释某个公式背后的物理意义</li>
+                                </ul>
+
+                                <div class="mt-6 p-4 bg-slate-900/50 rounded-lg">
+                                    <h4 class="font-semibold text-white mb-2">好的提问示例：</h4>
+                                    <code class="block text-slate-300 bg-slate-800 p-3 rounded text-sm">
+                                        "我是自动化专业大三学生，请解释 PID 控制器的比例系数、积分系数和微分系数分别对系统稳定性有什么影响？"
+                                    </code>
+                                </div>
+                            </div>
+                        </article>
+
+                        <article id="diagnosis" class="glass-card p-8">
+                            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                                <i data-lucide="microscope" class="w-6 h-6 text-purple-400" aria-hidden="true"></i>
+                                知识诊断报告
+                            </h2>
+                            <p class="text-slate-400 mb-4">
+                                诊断报告分为三个部分，帮助你全面理解知识点：
+                            </p>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="p-4 border border-slate-700 rounded-lg">
+                                    <h4 class="font-semibold text-purple-400 mb-2">本质定义</h4>
+                                    <p class="text-slate-400 text-sm">严格的数学或物理定义，建立准确的概念基础</p>
+                                </div>
+                                <div class="p-4 border border-slate-700 rounded-lg">
+                                    <h4 class="font-semibold text-pink-400 mb-2">直观理解</h4>
+                                    <p class="text-slate-400 text-sm">用生活化的例子或类比，帮助建立直觉认知</p>
+                                </div>
+                                <div class="p-4 border border-slate-700 rounded-lg">
+                                    <h4 class="font-semibold text-blue-400 mb-2">工程应用</h4>
+                                    <p class="text-slate-400 text-sm">实际工程场景中的应用，建立与实践的联系</p>
+                                </div>
+                            </div>
+                        </article>
+
+                        <article id="quiz" class="glass-card p-8">
+                            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                                <i data-lucide="target" class="w-6 h-6 text-pink-400" aria-hidden="true"></i>
+                                智能闯关测试
+                            </h2>
+                            <p class="text-slate-400 mb-4">
+                                测试题目是根据你的提问自动生成的，难度和侧重点与你当前的知识水平相匹配：
+                            </p>
+                            <div class="space-y-4">
+                                <div class="flex items-start gap-3">
+                                    <div class="w-8 h-8 bg-pink-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <span class="text-pink-400 font-bold">1</span>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-semibold text-white">选择答案</h4>
+                                        <p class="text-slate-400 text-sm">点击你认为正确的选项，系统会立即反馈</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="w-8 h-8 bg-pink-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <span class="text-pink-400 font-bold">2</span>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-semibold text-white">查看解析</h4>
+                                        <p class="text-slate-400 text-sm">无论对错，都会显示详细解释，帮助你理解</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="w-8 h-8 bg-pink-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <span class="text-pink-400 font-bold">3</span>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-semibold text-white">反复练习</h4>
+                                        <p class="text-slate-400 text-sm">每次提问都会生成新题目，可以反复练习巩固</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+
+                        <article id="study-plan" class="glass-card p-8">
+                            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                                <i data-lucide="calendar-check" class="w-6 h-6 text-emerald-400" aria-hidden="true"></i>
+                                个性化学习计划
+                            </h2>
+                            <p class="text-slate-400 mb-4">
+                                你可以主动让 AI 为你制定学习计划：
+                            </p>
+                            <div class="p-4 bg-slate-900/50 rounded-lg mb-4">
+                                <h4 class="font-semibold text-white mb-2">请求学习计划的示例：</h4>
+                                <code class="block text-slate-300 bg-slate-800 p-3 rounded text-sm">
+                                    "我要准备《自动控制原理》期末考试，请帮我制定一个为期两周的复习计划"
+                                </code>
+                            </div>
+                            <p class="text-slate-400">
+                                AI 会根据你的需求，生成包含阶段目标、重点内容和建议时长的学习计划表。
+                            </p>
+                        </article>
+
+                        <article id="discussion" class="glass-card p-8">
+                            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                                <i data-lucide="messages-square" class="w-6 h-6 text-purple-400" aria-hidden="true"></i>
+                                讨论区使用指南
+                            </h2>
+                            <div class="space-y-4">
+                                <h3 class="font-semibold text-lg mb-2">参与社区讨论</h3>
+                                <ul class="space-y-2 text-slate-400 list-disc list-inside">
+                                    <li>分享你的学习心得和技巧</li>
+                                    <li>提出问题寻求社区帮助</li>
+                                    <li>回答其他同学的问题</li>
+                                    <li>为有用的内容点赞</li>
+                                </ul>
+                                <div class="mt-4 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                                    <p class="text-purple-300">
+                                        <i data-lucide="info" class="w-4 h-4 inline mr-1" aria-hidden="true"></i>
+                                        提示：讨论区支持实时更新，新评论会自动显示！
+                                    </p>
+                                </div>
+                            </div>
+                        </article>
+
+                        <article id="faq" class="glass-card p-8">
+                            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                                <i data-lucide="help-circle" class="w-6 h-6 text-pink-400" aria-hidden="true"></i>
+                                常见问题 FAQ
+                            </h2>
+                            <div class="space-y-4">
+                                <div class="border-b border-slate-700 pb-4">
+                                    <h3 class="font-semibold text-lg mb-2">MechanicalAI 支持哪些学科？</h3>
+                                    <p class="text-slate-400">
+                                        我们支持控制工程、机械原理、电子电路、信号处理、材料力学、理论力学等多个工科领域，涵盖从基础数学到专业课程。
+                                    </p>
+                                </div>
+                                <div class="border-b border-slate-700 pb-4">
+                                    <h3 class="font-semibold text-lg mb-2">AI 回答不准确怎么办？</h3>
+                                    <p class="text-slate-400">
+                                        虽然我们尽量确保准确性，但 AI 偶尔可能出错。建议你：1. 重新提问让 AI 换个角度解释；2. 参考教材验证；3. 在讨论区询问其他同学。
+                                    </p>
+                                </div>
+                                <div class="border-b border-slate-700 pb-4">
+                                    <h3 class="font-semibold text-lg mb-2">可以保存对话记录吗？</h3>
+                                    <p class="text-slate-400">
+                                        当前版本对话记录保存在浏览器会话中，刷新页面会清空。我们正在开发历史记录功能，敬请期待！
+                                    </p>
+                                </div>
+                                <div class="pb-4">
+                                    <h3 class="font-semibold text-lg mb-2">如何反馈问题或建议？</h3>
+                                    <p class="text-slate-400">
+                                        你可以在讨论区发帖，或者通过 GitHub Issues 提交反馈。我们非常重视用户的意见！
+                                    </p>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <a href="index.html" class="logo">
+                    <div class="logo-icon">
+                        <i data-lucide="cpu" class="text-white w-5 h-5" aria-hidden="true"></i>
+                    </div>
+                    <span class="logo-text">MechanicalAI</span>
+                </a>
+                <p>新一代AI驱动的工科学习平台，让知识学习更智能、更高效、更有趣。</p>
+            </div>
+
+            <div>
+                <h4 class="footer-title">产品</h4>
+                <ul class="footer-links">
+                    <li><a href="chat.html">智能对话</a></li>
+                    <li><a href="tech.html">技术架构</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="footer-title">资源</h4>
+                <ul class="footer-links">
+                    <li><a href="discuss.html">讨论区</a></li>
+                    <li><a href="about.html">关于我们</a></li>
+                    <li><a href="help.html">帮助文档</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="footer-title">联系方式</h4>
+                <ul class="footer-links">
+                    <li><a href="mailto:contact@mechanicalai.com">联系我们</a></li>
+                    <li><a href="https://github.com/yuansgitlab/MechanicalAI" target="_blank">GitHub</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <p>&copy; 2024 MechanicalAI. All rights reserved.</p>
+            <div class="flex gap-6">
+                <a href="#" class="hover:text-white transition-colors">隐私政策</a>
+                <a href="#" class="hover:text-white transition-colors">服务条款</a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+        lucide.createIcons();
+
+        window.addEventListener('scroll', function() {
+            const navbar = document.getElementById('navbar');
+            if (window.scrollY > 50) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.glass-card').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(30px)';
+            el.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
+            observer.observe(el);
+        });
+
+        setTimeout(() => {
+            document.querySelectorAll('.glass-card').forEach(el => {
+                el.style.opacity = '1';
+                el.style.transform = 'translateY(0)';
+            });
+        }, 100);
+    </script>
+</body>
+</html>

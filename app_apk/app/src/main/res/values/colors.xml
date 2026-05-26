@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material Design 3 颜色系统 -->
+    <color name="purple_primary">#9333EA</color>
+    <color name="purple_dark">#7C3AED</color>
+    <color name="pink_secondary">#EC4899</color>
+    <color name="blue_tertiary">#3B82F6</color>
+    <color name="background_dark">#0A0A0A</color>
+    <color name="surface_dark">#1A1A1A</color>
+    <color name="text_primary">#F3F4F6</color>
+    <color name="text_secondary">#9CA3AF</color>
+</resources>

@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MechanicalAI 讨论区 - 与其他学习者交流心得，分享学习技巧">
+    <meta name="theme-color" content="#0a0a0a">
+    <title>讨论区 - MechanicalAI</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-black text-slate-200 font-sans antialiased">
+    <div id="particles-js"></div>
+
+    <nav class="navbar" id="navbar">
+        <div class="navbar-content">
+            <a href="index.html" class="logo">
+                <div class="logo-icon">
+                    <i data-lucide="cpu" class="text-white w-5 h-5" aria-hidden="true"></i>
+                </div>
+                <span class="logo-text">MechanicalAI</span>
+            </a>
+
+            <ul class="nav-links">
+                <li><a href="index.html">首页</a></li>
+                <li><a href="chat.html">智能对话</a></li>
+                <li><a href="discuss.html" class="active">讨论区</a></li>
+                <li><a href="question-bank.html">个人题库</a></li>
+                <li><a href="study-plans.html">学习规划</a></li>
+                <li><a href="memory-system.html">AI记忆</a></li>
+            </ul>
+
+            <div class="nav-actions">
+                <a href="chat.html" class="btn btn-primary">
+                    <i data-lucide="sparkles" class="w-4 h-4" aria-hidden="true"></i>
+                    开始使用
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="relative z-10">
+        <section class="hero" style="min-height: 40vh; padding-top: 8rem;">
+            <div class="hero-badge">
+                <i data-lucide="messages-square" class="w-4 h-4" aria-hidden="true"></i>
+                <span>社区互动</span>
+            </div>
+
+            <h1 class="hero-title">
+                开放<span class="gradient-text">讨论</span>区
+            </h1>
+
+            <p class="hero-subtitle">
+                与志同道合的学习者交流，分享心得，共同进步
+            </p>
+        </section>
+
+        <section class="discussion pb-20" style="padding-top: 0;">
+            <div class="discussion-container">
+                <div class="glass-card discussion-form">
+                    <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                        <i data-lucide="edit-3" class="w-5 h-5 text-purple-400" aria-hidden="true"></i>
+                        发布新讨论
+                    </h3>
+                    <div class="p-4 mb-6 bg-yellow-900/20 border border-yellow-700/30 rounded-lg text-sm text-yellow-300">
+                        <i data-lucide="info" class="w-4 h-4 inline mr-2"></i>
+                        <strong>本地存储模式：</strong>讨论内容将保存在你的浏览器本地，刷新页面不丢失，但仅在当前设备可见
+                    </div>
+                    <form id="discussion-form">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="form-group mb-4">
+                                <label for="author" class="form-label">你的昵称</label>
+                                <input type="text" id="author" class="form-input" placeholder="例如：工科学子" required autocomplete="off">
+                            </div>
+                            <div class="form-group mb-4">
+                                <label for="category" class="form-label">分类</label>
+                                <select id="category" class="form-input" required>
+                                    <option value="">选择分类</option>
+                                    <option value="control">控制工程</option>
+                                    <option value="mechanical">机械设计</option>
+                                    <option value="electronics">电子电路</option>
+                                    <option value="signal">信号处理</option>
+                                    <option value="general">综合讨论</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group mb-4">
+                            <label for="topic" class="form-label">讨论主题</label>
+                            <input type="text" id="topic" class="form-input" placeholder="简洁明了地描述你的话题..." required autocomplete="off">
+                        </div>
+                        <div class="form-group mb-6">
+                            <label for="content" class="form-label">详细内容</label>
+                            <textarea id="content" class="form-textarea" placeholder="详细描述你的问题、想法或经验..." required></textarea>
+                        </div>
+                        <div class="flex gap-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i data-lucide="send" class="w-4 h-4" aria-hidden="true"></i>
+                                发布讨论
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="clearAllComments()">
+                                <i data-lucide="trash-2" class="w-4 h-4" aria-hidden="true"></i>
+                                清空所有
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="flex flex-col md:flex-row gap-4 mb-8 mt-8">
+                    <div class="flex gap-2 flex-wrap">
+                        <button class="btn btn-primary text-sm" data-category="all" onclick="filterByCategory('all')">全部</button>
+                        <button class="btn btn-secondary text-sm" data-category="control" onclick="filterByCategory('control')">控制工程</button>
+                        <button class="btn btn-secondary text-sm" data-category="mechanical" onclick="filterByCategory('mechanical')">机械设计</button>
+                        <button class="btn btn-secondary text-sm" data-category="electronics" onclick="filterByCategory('electronics')">电子电路</button>
+                        <button class="btn btn-secondary text-sm" data-category="signal" onclick="filterByCategory('signal')">信号处理</button>
+                    </div>
+                    <div class="flex-1"></div>
+                    <div class="flex gap-2 items-center">
+                        <span class="text-sm text-slate-500">排序：</span>
+                        <select id="sort-select" class="form-input text-sm py-2" onchange="sortComments(this.value)">
+                            <option value="latest">最新发布</option>
+                            <option value="popular">最受欢迎</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="discussion-list" id="discussion-list">
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <a href="index.html" class="logo">
+                    <div class="logo-icon">
+                        <i data-lucide="cpu" class="text-white w-5 h-5" aria-hidden="true"></i>
+                    </div>
+                    <span class="logo-text">MechanicalAI</span>
+                </a>
+                <p>新一代AI驱动的工科学习平台，让知识学习更智能、更高效、更有趣。</p>
+            </div>
+
+            <div>
+                <h4 class="footer-title">产品</h4>
+                <ul class="footer-links">
+                    <li><a href="chat.html">智能对话</a></li>
+                    <li><a href="tech.html">技术架构</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="footer-title">资源</h4>
+                <ul class="footer-links">
+                    <li><a href="discuss.html">讨论区</a></li>
+                    <li><a href="about.html">关于我们</a></li>
+                    <li><a href="help.html">帮助文档</a></li>
+                    <li><a href="privacy-policy.html">隐私政策</a></li>
+                    <li><a href="user-agreement.html">用户协议</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="footer-title">联系方式</h4>
+                <ul class="footer-links">
+                    <li><a href="https://github.com/yuansgitlab/MechanicalAI" target="_blank">GitHub</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <p>&copy; 2026 MechanicalAI. All rights reserved.</p>
+            <div class="flex gap-6">
+                <a href="privacy-policy.html" class="hover:text-white transition-colors">隐私政策</a>
+                <a href="user-agreement.html" class="hover:text-white transition-colors">用户协议</a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+        let currentCategory = 'all';
+        let currentSort = 'latest';
+        let comments = [];
+        const STORAGE_KEY = 'mechanicalai-comments';
+
+        const categoryLabels = {
+            'control': '控制工程',
+            'mechanical': '机械设计',
+            'electronics': '电子电路',
+            'signal': '信号处理',
+            'general': '综合讨论'
+        };
+
+        // 从本地存储加载评论
+        function loadFromStorage() {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    comments = JSON.parse(stored);
+                }
+                // 确保有数据
+                if (!Array.isArray(comments)) {
+                    comments = [];
+                }
+            } catch (e) {
+                console.error('Failed to load from storage:', e);
+                comments = [];
+            }
+        }
+
+        // 保存到本地存储
+        function saveToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(comments));
+            } catch (e) {
+                console.error('Failed to save to storage:', e);
+            }
+        }
+
+        function formatTimestamp(ts) {
+            const date = new Date(ts);
+            const now = new Date();
+            const diff = (now - date) / 1000;
+
+            if (diff < 60) return '刚刚';
+            if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+            if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+            if (diff < 604800) return Math.floor(diff / 86400) + '天前';
+            return date.toLocaleDateString('zh-CN');
+        }
+
+        function showEmptyState() {
+            const container = document.getElementById('discussion-list');
+            container.innerHTML = `
+                <div class="glass-card p-8 text-center">
+                    <i data-lucide="inbox" class="w-16 h-16 mx-auto mb-4 text-purple-400 opacity-50"></i>
+                    <h3 class="text-xl font-semibold mb-2">暂无讨论</h3>
+                    <p class="text-slate-400">快来发布第一条讨论吧！</p>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        function loadComments() {
+            loadFromStorage();
+            renderComments();
+            if (comments.length === 0) {
+                showEmptyState();
+            }
+        }
+
+        function renderComments() {
+            const container = document.getElementById('discussion-list');
+            
+            let sortedComments = [...comments];
+            if (currentSort === 'popular') {
+                sortedComments.sort((a, b) => b.likes - a.likes);
+            } else {
+                sortedComments.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            }
+
+            if (currentCategory !== 'all') {
+                sortedComments = sortedComments.filter(c => c.category === currentCategory);
+            }
+
+            if (sortedComments.length === 0) {
+                showEmptyState();
+                return;
+            }
+
+            container.innerHTML = sortedComments.map(comment => `
+                <article class="discussion-item glass-card" data-category="${comment.category}" data-id="${comment.id}">
+                    <div class="discussion-header">
+                        <div class="discussion-avatar">${comment.author.charAt(0)}</div>
+                        <div class="discussion-meta">
+                            <div class="discussion-author">${comment.author}</div>
+                            <div class="discussion-time">${formatTimestamp(comment.timestamp)} · ${categoryLabels[comment.category]}</div>
+                        </div>
+                        <button class="text-slate-500 hover:text-red-400 transition text-sm" onclick="deleteComment('${comment.id}')">
+                            <i data-lucide="x" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <h4 class="font-semibold text-lg mb-2">${comment.topic}</h4>
+                    <p class="discussion-content">${comment.content}</p>
+                    <div class="flex gap-4 flex-wrap mt-2">
+                        <span class="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs">${categoryLabels[comment.category]}</span>
+                    </div>
+                    <div class="discussion-actions mt-4">
+                        <button class="discussion-action" onclick="likeComment('${comment.id}')" aria-label="点赞">
+                            <i data-lucide="thumbs-up" class="w-4 h-4" aria-hidden="true"></i>
+                            <span id="likes-${comment.id}">${comment.likes}</span>
+                        </button>
+                        <button class="discussion-action" onclick="toggleReply('${comment.id}')" aria-label="回复">
+                            <i data-lucide="message-circle" class="w-4 h-4" aria-hidden="true"></i>
+                            <span>${comment.replies ? comment.replies.length : 0}</span>
+                        </button>
+                    </div>
+                    <div id="reply-form-${comment.id}" class="mt-4 hidden">
+                        <div class="flex gap-2">
+                            <input type="text" id="reply-input-${comment.id}" class="form-input text-sm flex-1" placeholder="写下你的回复..." />
+                            <button class="btn btn-primary text-sm py-2" onclick="submitReply('${comment.id}')">回复</button>
+                        </div>
+                    </div>
+                    ${comment.replies && comment.replies.length > 0 ? `
+                        <div class="mt-4 pl-4 border-l border-slate-700 space-y-3">
+                            ${comment.replies.map((reply, idx) => `
+                                <div class="text-sm">
+                                    <div class="flex items-start justify-between">
+                                        <div>
+                                            <span class="text-purple-400 font-semibold">${reply.author}</span>
+                                            <span class="text-slate-500 ml-2">${formatTimestamp(reply.timestamp)}</span>
+                                        </div>
+                                        <button class="text-slate-500 hover:text-red-400 transition" onclick="deleteReply('${comment.id}', ${idx})">
+                                            <i data-lucide="x" class="w-3 h-3"></i>
+                                        </button>
+                                    </div>
+                                    <p class="text-slate-400 mt-1">${reply.content}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </article>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function filterByCategory(category) {
+            currentCategory = category;
+            document.querySelectorAll('[data-category]').forEach(btn => {
+                if (btn.tagName === 'BUTTON') {
+                    if (btn.dataset.category === category) {
+                        btn.classList.remove('btn-secondary');
+                        btn.classList.add('btn-primary');
+                    } else {
+                        btn.classList.remove('btn-primary');
+                        btn.classList.add('btn-secondary');
+                    }
+                }
+            });
+            renderComments();
+        }
+
+        function sortComments(sort) {
+            currentSort = sort;
+            renderComments();
+        }
+
+        function likeComment(commentId) {
+            const comment = comments.find(c => c.id === commentId);
+            if (comment) {
+                comment.likes += 1;
+                saveToStorage();
+                renderComments();
+            }
+        }
+
+        function deleteComment(commentId) {
+            if (confirm('确定要删除这条讨论吗？')) {
+                comments = comments.filter(c => c.id !== commentId);
+                saveToStorage();
+                renderComments();
+                if (comments.length === 0) {
+                    showEmptyState();
+                }
+            }
+        }
+
+        function deleteReply(commentId, replyIndex) {
+            const comment = comments.find(c => c.id === commentId);
+            if (comment && comment.replies) {
+                comment.replies.splice(replyIndex, 1);
+                saveToStorage();
+                renderComments();
+            }
+        }
+
+        function clearAllComments() {
+            if (confirm('确定要清空所有讨论吗？此操作不可恢复！')) {
+                comments = [];
+                saveToStorage();
+                renderComments();
+                showEmptyState();
+            }
+        }
+
+        function toggleReply(commentId) {
+            const form = document.getElementById(`reply-form-${commentId}`);
+            form.classList.toggle('hidden');
+        }
+
+        function submitReply(commentId) {
+            const input = document.getElementById(`reply-input-${commentId}`);
+            if (input.value.trim()) {
+                const comment = comments.find(c => c.id === commentId);
+                if (!comment.replies) comment.replies = [];
+                comment.replies.push({
+                    author: '匿名用户',
+                    content: input.value.trim(),
+                    timestamp: new Date().toISOString()
+                });
+                input.value = '';
+                toggleReply(commentId);
+                saveToStorage();
+                renderComments();
+            }
+        }
+
+        document.getElementById('discussion-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const author = document.getElementById('author').value;
+            const topic = document.getElementById('topic').value;
+            const category = document.getElementById('category').value;
+            const content = document.getElementById('content').value;
+
+            const newComment = {
+                id: Date.now().toString(),
+                author,
+                topic,
+                category,
+                content,
+                timestamp: new Date().toISOString(),
+                likes: 0,
+                replies: []
+            };
+            
+            comments.unshift(newComment);
+            saveToStorage();
+            renderComments();
+            document.getElementById('discussion-form').reset();
+        });
+
+        lucide.createIcons();
+
+        window.addEventListener('scroll', function() {
+            const navbar = document.getElementById('navbar');
+            if (window.scrollY > 50) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        loadComments();
+
+        setTimeout(() => {
+            document.querySelectorAll('.glass-card').forEach(el => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(30px)';
+                el.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
+                observer.observe(el);
+            });
+            setTimeout(() => {
+                document.querySelectorAll('.glass-card').forEach(el => {
+                    el.style.opacity = '1';
+                    el.style.transform = 'translateY(0)';
+                });
+            }, 100);
+        }, 100);
+    </script>
+</body>
+</html>

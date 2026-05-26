@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MechanicalAI 技术架构 - 了解我们如何构建下一代 AI 工科学习平台">
+    <meta name="theme-color" content="#0a0a0a">
+    <title>技术架构 - MechanicalAI</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-black text-slate-200 font-sans antialiased">
+    <div id="particles-js"></div>
+
+    <nav class="navbar" id="navbar">
+        <div class="navbar-content">
+            <a href="index.html" class="logo">
+                <div class="logo-icon">
+                    <i data-lucide="cpu" class="text-white w-5 h-5" aria-hidden="true"></i>
+                </div>
+                <span class="logo-text">MechanicalAI</span>
+            </a>
+
+            <ul class="nav-links">
+                <li><a href="index.html">首页</a></li>
+                <li><a href="chat.html">智能对话</a></li>
+                <li><a href="discuss.html">讨论区</a></li>
+                <li><a href="question-bank.html">个人题库</a></li>
+                <li><a href="study-plans.html">学习规划</a></li>
+                <li><a href="tech.html">技术架构</a></li>
+            </ul>
+
+            <div class="nav-actions">
+                <a href="chat.html" class="btn btn-primary">
+                    <i data-lucide="sparkles" class="w-4 h-4" aria-hidden="true"></i>
+                    开始使用
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="relative z-10">
+        <section class="hero" style="min-height: 50vh; padding-top: 8rem;">
+            <div class="hero-badge">
+                <i data-lucide="server" class="w-4 h-4" aria-hidden="true"></i>
+                <span>技术架构</span>
+            </div>
+
+            <h1 class="hero-title">
+                深度了解我们的<span class="gradient-text">技术</span>
+            </h1>
+
+            <p class="hero-subtitle">
+                探索 MechanicalAI 背后的技术架构，从大模型到前端交互的完整技术栈
+            </p>
+        </section>
+
+        <section class="features py-20">
+            <div class="features-container">
+                <div class="section-header">
+                    <span class="section-label">系统概览</span>
+                    <h2 class="section-title">整体架构</h2>
+                    <p class="section-subtitle">
+                        MechanicalAI 采用现代化的云原生架构设计，确保高性能和高可用性
+                    </p>
+                </div>
+
+                <div class="glass-card p-8 mb-12">
+                    <div class="text-center mb-8">
+                        <h3 class="text-2xl font-bold mb-2">系统架构图</h3>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="text-center p-6 border border-purple-500/30 rounded-xl bg-purple-500/5">
+                            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
+                                <i data-lucide="monitor" class="w-8 h-8 text-white" aria-hidden="true"></i>
+                            </div>
+                            <h4 class="font-bold text-lg mb-2">前端层</h4>
+                            <ul class="text-slate-400 text-sm space-y-1">
+                                <li>HTML5 + CSS3 + JavaScript</li>
+                                <li>Tailwind CSS</li>
+                                <li>Lucide Icons</li>
+                                <li>Particle.js (背景动画)</li>
+                            </ul>
+                        </div>
+                        <div class="text-center p-6 border border-pink-500/30 rounded-xl bg-pink-500/5">
+                            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
+                                <i data-lucide="server" class="w-8 h-8 text-white" aria-hidden="true"></i>
+                            </div>
+                            <h4 class="font-bold text-lg mb-2">后端层</h4>
+                            <ul class="text-slate-400 text-sm space-y-1">
+                                <li>FastAPI (Python)</li>
+                                <li>Uvicorn ASGI Server</li>
+                                <li>WebSocket 实时通信</li>
+                                <li>CORS 跨域支持</li>
+                            </ul>
+                        </div>
+                        <div class="text-center p-6 border border-blue-500/30 rounded-xl bg-blue-500/5">
+                            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
+                                <i data-lucide="brain" class="w-8 h-8 text-white" aria-hidden="true"></i>
+                            </div>
+                            <h4 class="font-bold text-lg mb-2">AI 模型层</h4>
+                            <ul class="text-slate-400 text-sm space-y-1">
+                                <li>DeepSeek LLM API</li>
+                                <li>结构化输出 (JSON)</li>
+                                <li>提示词工程</li>
+                                <li>工程知识库</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+                    <div class="glass-card p-6">
+                        <h4 class="text-xl font-bold mb-4 flex items-center gap-2">
+                            <i data-lucide="globe" class="w-6 h-6 text-purple-400" aria-hidden="true"></i>
+                            前端技术栈
+                        </h4>
+                        <div class="space-y-4">
+                            <div class="p-4 bg-slate-900/50 rounded-lg">
+                                <h5 class="font-semibold text-white mb-2">用户界面</h5>
+                                <p class="text-slate-400 text-sm">
+                                    采用纯原生 HTML/CSS/JS 实现，无需复杂的构建系统，易于部署和维护。
+                                </p>
+                            </div>
+                            <div class="p-4 bg-slate-900/50 rounded-lg">
+                                <h5 class="font-semibold text-white mb-2">UI 设计</h5>
+                                <p class="text-slate-400 text-sm">
+                                    Tailwind CSS 提供快速开发和可定制的组件库，实现玻璃态效果和紫色/粉色主题配色。
+                                </p>
+                            </div>
+                            <div class="p-4 bg-slate-900/50 rounded-lg">
+                                <h5 class="font-semibold text-white mb-2">图标系统</h5>
+                                <p class="text-slate-400 text-sm">
+                                    使用 Lucide 图标库，提供统一、美观的 SVG 图标，支持动态加载。
+                                </p>
+                            </div>
+                            <div class="p-4 bg-slate-900/50 rounded-lg">
+                                <h5 class="font-semibold text-white mb-2">部署平台</h5>
+                                <p class="text-slate-400 text-sm">
+                                    前端部署在 Vercel，享受全球 CDN 和自动 HTTPS 支持。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="glass-card p-6">
+                        <h4 class="text-xl font-bold mb-4 flex items-center gap-2">
+                            <i data-lucide="zap" class="w-6 h-6 text-pink-400" aria-hidden="true"></i>
+                            后端技术栈
+                        </h4>
+                        <div class="space-y-4">
+                            <div class="p-4 bg-slate-900/50 rounded-lg">
+                                <h5 class="font-semibold text-white mb-2">Web 框架</h5>
+                                <p class="text-slate-400 text-sm">
+                                    FastAPI 是一个高性能的现代 Python Web 框架，支持异步请求处理。
+                                </p>
+                            </div>
+                            <div class="p-4 bg-slate-900/50 rounded-lg">
+                                <h5 class="font-semibold text-white mb-2">实时通信</h5>
+                                <p class="text-slate-400 text-sm">
+                                    WebSocket 协议实现实时评论推送，支持全双工通信。
+                                </p>
+                            </div>
+                            <div class="p-4 bg-slate-900/50 rounded-lg">
+                                <h5 class="font-semibold text-white mb-2">数据验证</h5>
+                                <p class="text-slate-400 text-sm">
+                                    Pydantic 提供类型提示驱动的数据验证和序列化。
+                                </p>
+                            </div>
+                            <div class="p-4 bg-slate-900/50 rounded-lg">
+                                <h5 class="font-semibold text-white mb-2">部署平台</h5>
+                                <p class="text-slate-400 text-sm">
+                                    后端部署在 Hugging Face Spaces，提供 GPU 资源和自动扩展。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-header mt-16">
+                    <span class="section-label">AI 系统</span>
+                    <h2 class="section-title">大语言模型集成</h2>
+                    <p class="section-subtitle">
+                        我们精心设计的提示词工程，让 AI 成为专业的工科导师
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <article class="feature-card glass-card">
+                        <div class="feature-icon purple">
+                            <i data-lucide="message-circle" class="w-6 h-6" aria-hidden="true"></i>
+                        </div>
+                        <h3 class="feature-title">结构化输出</h3>
+                        <p class="feature-description">
+                            使用 DeepSeek API 的 response_format 功能，确保 AI 输出符合我们期望的 JSON 结构。
+                        </p>
+                    </article>
+
+                    <article class="feature-card glass-card">
+                        <div class="feature-icon pink">
+                            <i data-lucide="book-open" class="w-6 h-6" aria-hidden="true"></i>
+                        </div>
+                        <h3 class="feature-title">提示词设计</h3>
+                        <p class="feature-description">
+                            经过精心调优的系统提示词，指导 AI 以启发式教学方式解释复杂的工科概念。
+                        </p>
+                    </article>
+
+                    <article class="feature-card glass-card">
+                        <div class="feature-icon purple">
+                            <i data-lucide="graduation-cap" class="w-6 h-6" aria-hidden="true"></i>
+                        </div>
+                        <h3 class="feature-title">多阶段推理</h3>
+                        <p class="feature-description">
+                            AI 不仅回答问题，还提供诊断报告、测试题目和学习计划，形成完整的学习闭环。
+                        </p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="about py-20">
+            <div class="about-container">
+                <div class="section-header">
+                    <span class="section-label">开发指南</span>
+                    <h2 class="section-title">开源与贡献</h2>
+                    <p class="section-subtitle">
+                        我们欢迎任何人参与贡献，让 MechanicalAI 变得更好
+                    </p>
+                </div>
+
+                <div class="glass-card p-8">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <h3 class="text-2xl font-bold mb-4">快速开始</h3>
+                            <div class="space-y-4">
+                                <div class="p-4 bg-slate-900/50 rounded-lg">
+                                    <h5 class="font-semibold text-purple-400 mb-2">1. 克隆仓库</h5>
+                                    <code class="block text-slate-300 bg-slate-800 p-3 rounded text-sm">
+                                        git clone https://github.com/yuansgitlab/MechanicalAI
+                                    </code>
+                                </div>
+                                <div class="p-4 bg-slate-900/50 rounded-lg">
+                                    <h5 class="font-semibold text-pink-400 mb-2">2. 安装依赖</h5>
+                                    <code class="block text-slate-300 bg-slate-800 p-3 rounded text-sm">
+                                        cd backend<br>
+                                        pip install -r requirements.txt
+                                    </code>
+                                </div>
+                                <div class="p-4 bg-slate-900/50 rounded-lg">
+                                    <h5 class="font-semibold text-blue-400 mb-2">3. 配置环境变量</h5>
+                                    <code class="block text-slate-300 bg-slate-800 p-3 rounded text-sm">
+                                        export DEEPSEEK_API_KEY=your_api_key
+                                    </code>
+                                </div>
+                                <div class="p-4 bg-slate-900/50 rounded-lg">
+                                    <h5 class="font-semibold text-green-400 mb-2">4. 运行服务</h5>
+                                    <code class="block text-slate-300 bg-slate-800 p-3 rounded text-sm">
+                                        uvicorn main:app --reload
+                                    </code>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold mb-4">参与贡献</h3>
+                            <ul class="space-y-3 text-slate-400">
+                                <li class="flex items-start gap-3">
+                                    <i data-lucide="check-circle" class="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
+                                    <span>通过 GitHub Issues 报告 Bug 或提出功能建议</span>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <i data-lucide="check-circle" class="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
+                                    <span>提交 Pull Request 改进代码或文档</span>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <i data-lucide="check-circle" class="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
+                                    <span>完善提示词，提升 AI 回答质量</span>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <i data-lucide="check-circle" class="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
+                                    <span>在讨论区分享使用经验和学习心得</span>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <i data-lucide="check-circle" class="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
+                                    <span>翻译文档，帮助更多地区的用户</span>
+                                </li>
+                            </ul>
+
+                            <div class="mt-6">
+                                <a href="https://github.com/yuansgitlab/MechanicalAI" target="_blank" class="btn btn-primary inline-flex">
+                                    <i data-lucide="github" class="w-5 h-5" aria-hidden="true"></i>
+                                    访问 GitHub 仓库
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <a href="index.html" class="logo">
+                    <div class="logo-icon">
+                        <i data-lucide="cpu" class="text-white w-5 h-5" aria-hidden="true"></i>
+                    </div>
+                    <span class="logo-text">MechanicalAI</span>
+                </a>
+                <p>新一代AI驱动的工科学习平台，让知识学习更智能、更高效、更有趣。</p>
+            </div>
+
+            <div>
+                <h4 class="footer-title">产品</h4>
+                <ul class="footer-links">
+                    <li><a href="chat.html">智能对话</a></li>
+                    <li><a href="tech.html">技术架构</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="footer-title">资源</h4>
+                <ul class="footer-links">
+                    <li><a href="discuss.html">讨论区</a></li>
+                    <li><a href="about.html">关于我们</a></li>
+                    <li><a href="help.html">帮助文档</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="footer-title">联系方式</h4>
+                <ul class="footer-links">
+                    <li><a href="mailto:contact@mechanicalai.com">联系我们</a></li>
+                    <li><a href="https://github.com/yuansgitlab/MechanicalAI" target="_blank">GitHub</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <p>&copy; 2024 MechanicalAI. All rights reserved.</p>
+            <div class="flex gap-6">
+                <a href="#" class="hover:text-white transition-colors">隐私政策</a>
+                <a href="#" class="hover:text-white transition-colors">服务条款</a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+        lucide.createIcons();
+
+        window.addEventListener('scroll', function() {
+            const navbar = document.getElementById('navbar');
+            if (window.scrollY > 50) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.feature-card, .glass-card').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(30px)';
+            el.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
+            observer.observe(el);
+        });
+
+        setTimeout(() => {
+            document.querySelectorAll('.feature-card, .glass-card').forEach(el => {
+                el.style.opacity = '1';
+                el.style.transform = 'translateY(0)';
+            });
+        }, 100);
+    </script>
+</body>
+</html>
