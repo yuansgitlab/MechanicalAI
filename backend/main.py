@@ -142,11 +142,14 @@ async def websocket_endpoint(websocket: WebSocket):
         active_connections.remove(websocket)
 
 # ============================================
-# 原有的聊天 API
+# 聊天 API
 # ============================================
 class ChatRequest(BaseModel):
     message: str
     history: List[Dict] = []  # 对话历史记录
+    api_key: str = None  # 可选的自定义 API Key
+    api_url: str = None  # 可选的自定义 API URL
+    model: str = None    # 可选的自定义模型
 
 @app.get("/")
 async def root():
@@ -154,7 +157,12 @@ async def root():
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    if not DEEPSEEK_API_KEY:
+    # 使用提供的配置或默认配置
+    api_key = request.api_key or DEEPSEEK_API_KEY
+    api_url = request.api_url or API_URL
+    model = request.model or "deepseek-chat"
+
+    if not api_key:
         raise HTTPException(status_code=500, detail="API Key not configured")
 
     # 构建包含历史对话的消息列表
@@ -175,13 +183,13 @@ async def chat(request: ChatRequest):
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
-                API_URL,
+                api_url,
                 headers={
-                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                    "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "deepseek-chat",
+                    "model": model,
                     "messages": messages,
                     "response_format": {"type": "json_object"},
                     "temperature": 0.7

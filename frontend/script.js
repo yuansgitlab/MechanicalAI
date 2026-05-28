@@ -21,7 +21,7 @@ marked.setOptions({ gfm: true, breaks: true });
 const API_URL = 'https://yuangitlab-mechanical-ai-api.hf.space/api/chat';
 
 // 对话历史管理
-const chatHistory = [];
+const messageHistory = [];
 const MAX_HISTORY_LENGTH = 20; // 最多保存20条历史消息
 
 // 渲染数学公式的公共函数
@@ -71,7 +71,7 @@ async function sendMessage() {
         // 构建包含历史对话的请求
         const requestData = {
             message: text,
-            history: chatHistory.slice(0)
+            history: messageHistory.slice(0)
         };
         
         const response = await fetch(API_URL, {
@@ -83,15 +83,15 @@ async function sendMessage() {
         const data = await response.json();
 
         // 保存用户消息到历史
-        chatHistory.push({ role: 'user', content: text });
+        messageHistory.push({ role: 'user', content: text });
         
         // 保存AI回复到历史
         const botResponse = data.chat_response || "";
-        chatHistory.push({ role: 'assistant', content: botResponse });
+        messageHistory.push({ role: 'assistant', content: botResponse });
         
         // 限制历史记录长度
-        if (chatHistory.length > MAX_HISTORY_LENGTH) {
-            chatHistory.shift(); // 移除最老的消息
+        if (messageHistory.length > MAX_HISTORY_LENGTH) {
+            messageHistory.shift(); // 移除最老的消息
         }
 
         // 1. 更新左侧聊天 (支持公式渲染)
