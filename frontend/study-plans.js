@@ -237,6 +237,7 @@ class StudyPlansManager {
         task.completed = !task.completed;
         task.completedAt = task.completed ? new Date().toISOString() : null;
 
+        // 重新计算进度
         const completedCount = plan.phases.reduce((total, p) => {
             return total + p.tasks.filter(t => t.completed).length;
         }, 0);
@@ -245,8 +246,10 @@ class StudyPlansManager {
         plan.progress = plan.totalTasks > 0 
             ? Math.round((completedCount / plan.totalTasks) * 100) 
             : 0;
+        plan.updatedAt = new Date().toISOString();
 
-        return this.updatePlan(planId, { phases: plan.phases });
+        // 保存所有更新
+        return this.updatePlan(planId, plan);
     }
 
     async updateTask(planId, phaseId, taskId, updates) {
@@ -266,8 +269,9 @@ class StudyPlansManager {
         }
 
         Object.assign(task, updates);
+        plan.updatedAt = new Date().toISOString();
 
-        return this.updatePlan(planId, { phases: plan.phases });
+        return this.updatePlan(planId, plan);
     }
 
     async addTask(planId, phaseId, taskText) {
@@ -293,8 +297,9 @@ class StudyPlansManager {
 
         phase.tasks.push(newTask);
         plan.totalTasks += 1;
+        plan.updatedAt = new Date().toISOString();
 
-        return this.updatePlan(planId, { phases: plan.phases });
+        return this.updatePlan(planId, plan);
     }
 
     async removeTask(planId, phaseId, taskId) {
@@ -323,8 +328,9 @@ class StudyPlansManager {
         plan.progress = plan.totalTasks > 0 
             ? Math.round((plan.completedTasks / plan.totalTasks) * 100) 
             : 0;
+        plan.updatedAt = new Date().toISOString();
 
-        return this.updatePlan(planId, { phases: plan.phases });
+        return this.updatePlan(planId, plan);
     }
 
     async addPhase(planId, phaseName) {
@@ -340,8 +346,9 @@ class StudyPlansManager {
         };
 
         plan.phases.push(newPhase);
+        plan.updatedAt = new Date().toISOString();
 
-        return this.updatePlan(planId, { phases: plan.phases });
+        return this.updatePlan(planId, plan);
     }
 
     async getStatistics() {
