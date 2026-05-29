@@ -323,6 +323,7 @@
     <script src="chat-history.js"></script>
     <script src="model-config.js"></script>
     <script src="long-term-memory.js"></script>
+    <script src="question-bank.js"></script>
     <script>
         let currentSession = null;
         let isInitialized = false;
@@ -332,6 +333,7 @@
             try {
                 await chatHistory.init();
                 await ltm.init();
+                await questionBank.init();
                 await loadHistoryList();
                 await startNewChat();
                 updateModelIndicator();
@@ -719,16 +721,27 @@
                 };
                 const colorClass = difficultyColors[q.difficulty] || 'bg-purple-600/20 text-purple-300 border-purple-600/30';
                 
+                // 安全地序列化题目数据用于保存
+                const safeQuestion = JSON.stringify(q).replace(/"/g, '&quot;');
+                
                 return `
-                    <div class="bg-white/5 p-4 rounded-2xl border border-white/5 animate-in">
+                    <div class="bg-white/5 p-4 rounded-2xl border border-white/5 animate-in" id="quiz-${idx}">
                         <div class="flex items-center justify-between mb-2">
                             <p class="font-bold text-orange-200 text-sm">Q${idx+1}: ${q.question}</p>
-                            ${q.difficulty ? `<span class="text-xs px-2 py-0.5 rounded-full border ${colorClass}">${q.difficulty}</span>` : ''}
+                            <div class="flex items-center gap-2">
+                                ${q.difficulty ? `<span class="text-xs px-2 py-0.5 rounded-full border ${colorClass}">${q.difficulty}</span>` : ''}
+                                <button onclick="addToQuestionBank(${idx}, '${safeQuestion}')" 
+                                        class="btn btn-ghost text-xs p-1.5 hover:bg-purple-600/20 text-purple-400" 
+                                        title="加入题库" 
+                                        id="add-to-bank-btn-${idx}">
+                                    <i data-lucide="bookmark-plus" class="w-4 h-4"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div class="grid grid-cols-1 gap-2">
+                        <div class="grid grid-cols-1 gap-2" id="quiz-options-${idx}">
                             ${q.options.map(opt => `
-                                <button onclick="checkAnswer(this, '${q.answer}', '${q.analysis.replace(/'/g, "\\'")}')" 
-                                        class="text-left px-4 py-2 bg-black/30 hover:bg-blue-600/20 rounded-xl transition text-xs border border-white/5 text-slate-300">
+                                <button onclick="checkAnswer(this, ${idx}, '${q.answer}', '${q.analysis.replace(/'/g, "\\'")}')" 
+                                        class="text-left px-4 py-2 bg-black/30 hover:bg-blue-600/20 rounded-xl transition text-xs border border-white/5 text-slate-300 quiz-option">
                                     ${opt}
                                 </button>
                             `).join('')}
@@ -736,23 +749,132 @@
                     </div>
                 `;
             }).join('');
+            
+            // 添加底部操作栏
+            container.innerHTML += `
+                <div class="mt-4 flex justify-center gap-3">
+                    <button onclick="openQuestionBank()" class="btn btn-secondary text-sm">
+                        <i data-lucide="book-open" class="w-4 h-4"></i>
+                        打开题库
+                    </button>
+                    <button onclick="retryQuiz()" class="btn btn-primary text-sm">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                        重新答题
+                    </button>
+                </div>
+            `;
+            
             // 题库里的数学公式也要渲染
             renderMath(container);
+            lucide.createIcons();
         }
 
         // 检查答案
-        function checkAnswer(btn, correct, analysis) {
+        function checkAnswer(btn, quizIdx, correct, analysis) {
             const isCorrect = btn.innerText.trim().startsWith(correct);
+            
+            // 先移除所有选项的选中状态
+            const optionsContainer = document.getElementById(`quiz-options-${quizIdx}`);
+            optionsContainer.querySelectorAll('.quiz-option').forEach(opt => {
+                opt.classList.remove('!bg-green-600/40', '!bg-red-600/40', '!bg-purple-600/40');
+                // 标记正确答案
+                if (opt.innerText.trim().startsWith(correct)) {
+                    opt.classList.add('!bg-green-600/20', 'border-green-500/30');
+                }
+            });
+            
+            // 标记用户选择的答案
             btn.classList.add(isCorrect ? '!bg-green-600/40' : '!bg-red-600/40');
             
             // 如果已经有解析了就不重复添加
-            if (btn.parentElement.querySelector('.quiz-feedback')) return;
+            if (optionsContainer.querySelector('.quiz-feedback')) return;
 
             const feedback = document.createElement('div');
             feedback.className = 'quiz-feedback mt-3 text-[10px] text-slate-400 border-t border-white/5 pt-2 animate-in';
             feedback.innerHTML = marked.parse(analysis);
-            btn.parentElement.appendChild(feedback);
+            optionsContainer.appendChild(feedback);
             renderMath(feedback);
+            
+            // 显示"加入题库"的提示
+            const addBtn = document.getElementById(`add-to-bank-btn-${quizIdx}`);
+            if (addBtn) {
+                addBtn.classList.add('scale-110');
+                setTimeout(() => addBtn.classList.remove('scale-110'), 500);
+            }
+        }
+
+        // 添加题目到题库
+        async function addToQuestionBank(quizIdx, questionData) {
+            try {
+                const q = JSON.parse(questionData.replace(/&quot;/g, '"'));
+                
+                // 检查题目是否已存在
+                const existingQuestions = await questionBank.getAllQuestions();
+                const isDuplicate = existingQuestions.some(eq => eq.question === q.question);
+                
+                if (isDuplicate) {
+                    showToast('这道题已经在题库里了哦！');
+                    return;
+                }
+                
+                // 确定题目类型
+                let type = 'single';
+                if (q.options && q.options.length > 0) {
+                    if (q.answer.length > 1) {
+                        type = 'multiple';
+                    }
+                } else if (q.question.includes('判断') || q.question.includes('对错')) {
+                    type = 'judge';
+                } else {
+                    type = 'essay';
+                }
+                
+                // 准备题目数据
+                const questionToSave = {
+                    question: q.question,
+                    options: q.options || [],
+                    answer: q.answer,
+                    analysis: q.analysis || '',
+                    difficulty: q.difficulty || '基础',
+                    subject: '',
+                    category: '',
+                    tags: ['AI生成'],
+                    type: type
+                };
+                
+                // 保存到题库
+                const saved = await questionBank.addQuestion(questionToSave);
+                
+                // 更新按钮状态
+                const btn = document.getElementById(`add-to-bank-btn-${quizIdx}`);
+                if (btn) {
+                    btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i>';
+                    btn.classList.remove('text-purple-400', 'hover:bg-purple-600/20');
+                    btn.classList.add('text-green-400');
+                    btn.disabled = true;
+                    lucide.createIcons();
+                }
+                
+                showToast('题目已加入题库！');
+            } catch (e) {
+                console.error('Add to question bank error:', e);
+                showToast('加入题库失败，请重试');
+            }
+        }
+
+        // 打开题库
+        function openQuestionBank() {
+            window.open('question-bank.html', '_blank');
+        }
+
+        // 重新答题
+        function retryQuiz() {
+            if (confirm('确定要重新答题吗？')) {
+                // 清除答题状态，重新渲染
+                if (currentSession && currentSession.quiz) {
+                    renderQuiz(currentSession.quiz);
+                }
+            }
         }
 
         // 滚动到底部
