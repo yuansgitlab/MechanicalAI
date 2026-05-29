@@ -99,37 +99,44 @@ class LongTermMemory {
     // 从文本中提取知识
     extractKnowledgeFromText(text) {
         const items = [];
+        
+        // 工科相关的知识模式
         const patterns = {
-            formula: /([A-Za-z]+\([^)]*\)\s*=?[^.\n]+)/g,
-            definition: /([^.\n]+是[^.\n]+)/g,
-            concept: /([A-Za-z\u4e00-\u9fa5_]+[：:]\s*[^.\n]+)/g
+            formula: /([A-Za-z_]+\([^)]*\)\s*[=:]\s*[^.\n]{10,})/g,
+            definition: /([^.。！？\n]{5,50}是[^.。！？\n]{5,100})/g,
+            principle: /([^.。！？\n]{0,30}(?:原理|定律|定理|法则)[^.。！？\n]{5,50})/g,
+            concept: /([^.。！？\n]{0,20}(?:系统|函数|方程|控制器|变换)[^.。！？\n]{5,80})/g,
+            property: /([^.。！？\n]{0,20}(?:具有|特性|特点|优点|缺点)[^.。！？\n]{5,60})/g,
+            application: /([^.。！？\n]{0,20}(?:用于|应用于|常用于|适用于)[^.。！？\n]{5,60})/g
         };
 
         for (const [type, pattern] of Object.entries(patterns)) {
             let match;
             while ((match = pattern.exec(text)) !== null) {
-                if (match[1].length > 10) {
+                const content = match[1].trim();
+                if (content.length > 10 && content.length < 200) {
                     items.push({
                         id: 'knowledge_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                        content: match[1].trim(),
+                        content: content,
                         type: type,
-                        category: this.categorizeContent(match[1]),
-                        topic: this.extractTopic(match[1])
+                        category: this.categorizeContent(content),
+                        topic: this.extractTopic(content)
                     });
                 }
             }
         }
 
-        return items;
+        return items.slice(0, 10);
     }
 
     categorizeContent(text) {
         const keywords = {
-            '数学': ['方程', '公式', '定理', '函数', '微分', '积分'],
-            '物理': ['力', '能量', '动量', '定律', '定理'],
-            '控制工程': ['系统', '传递函数', 'PID', '反馈', '拉普拉斯'],
-            '机械设计': ['结构', '应力', '材料', '零件'],
-            '电子电路': ['电路', '电阻', '电容', '二极管', '晶体管']
+            '数学基础': ['方程', '公式', '函数', '微分', '积分', '矩阵', '特征值', '向量'],
+            '物理原理': ['力', '能量', '动量', '定律', '定理', '场', '波'],
+            '控制工程': ['系统', '传递函数', 'PID', '反馈', '拉普拉斯', '伯德图', '稳定性', '增益', '相位', '校正'],
+            '机械设计': ['结构', '应力', '应变', '材料', '零件', '强度', '刚度', '疲劳'],
+            '电子电路': ['电路', '电阻', '电容', '电感', '二极管', '晶体管', '放大器', '滤波器'],
+            '信号处理': ['信号', '频谱', '傅里叶', '拉普拉斯', 'Z变换', '滤波器', '采样']
         };
 
         for (const [cat, words] of Object.entries(keywords)) {
@@ -137,7 +144,7 @@ class LongTermMemory {
                 return cat;
             }
         }
-        return '其他';
+        return '通用知识';
     }
 
     extractTopic(text) {
@@ -195,7 +202,7 @@ class LongTermMemory {
 
     extractTopics(messages) {
         const text = messages.map(m => m.content).join('\n');
-        const topicPattern = /(拉普拉斯|傅里叶|PID|控制|系统|微分|积分|方程|定理|公式)/g;
+        const topicPattern = /(拉普拉斯|傅里叶|PID|控制|系统|微分|积分|方程|定理|公式|传递函数|伯德图|稳定性|机械|电路|电子|信号|采样|滤波器|反馈|控制器|校正|增益|相位|频率|响应|时域|频域)/g;
         const matches = text.match(topicPattern);
         return matches ? [...new Set(matches)] : [];
     }
@@ -334,37 +341,90 @@ class LongTermMemory {
         const contextParts = [];
         
         // 1. 添加上下文提示
-        contextParts.push('---用户历史背景---');
+        contextParts.push('=== 用户历史背景 ===');
         
-        // 2. 添加相关知识
+        // 2. 添加最近对话摘要（最近10条消息）
+        if (currentMessages.length > 0) {
+            const recentMessages = currentMessages.slice(-10);
+            const conversationSummary = this.summarizeRecentConversation(recentMessages);
+            if (conversationSummary) {
+                contextParts.push('【最近对话摘要】');
+                contextParts.push(conversationSummary);
+            }
+        }
+        
+        // 3. 添加相关知识（增加到8条）
         const relevantKnowledge = await this.retrieveKnowledge(
             currentMessages.map(m => m.content).join(' '),
-            3
+            8
         );
         if (relevantKnowledge.length > 0) {
-            contextParts.push('相关知识:');
-            relevantKnowledge.forEach(k => contextParts.push(`- ${k.content}`));
+            contextParts.push('\n【相关知识】');
+            relevantKnowledge.forEach(k => contextParts.push(`• ${k.content}`));
         }
         
-        // 3. 添加用户画像
+        // 4. 添加用户画像
         const profile = await this.getProfile();
         if (profile.learningHistory) {
-            contextParts.push(`学习进度: ${JSON.stringify(profile.learningHistory, null, 2)}`);
+            contextParts.push('\n【用户学习情况】');
+            const history = profile.learningHistory;
+            if (history.style) {
+                contextParts.push(`交流风格: ${history.style.messageLength}，技术等级: ${history.style.technicalLevel}`);
+            }
+            if (history.topics && history.topics.length > 0) {
+                contextParts.push(`关注主题: ${history.topics.slice(0, 5).join(', ')}`);
+            }
+            if (history.difficulties && history.difficulties.length > 0) {
+                contextParts.push(`遇到的难点: ${history.difficulties.join(', ')}`);
+            }
         }
         
-        // 4. 添加相关摘要
+        // 5. 添加相关摘要
         const relevantSummaries = await this.getRelevantSummaries(sessionId);
         if (relevantSummaries.length > 0) {
-            contextParts.push('之前对话要点:');
-            relevantSummaries.forEach(s => {
-                contextParts.push(`主题: ${s.topics.join(', ')}`);
-                contextParts.push(`要点: ${s.keyInsights.slice(0, 2).join('; ')}`);
+            contextParts.push('\n【历史对话要点】');
+            relevantSummaries.forEach((s, idx) => {
+                if (s.topics && s.topics.length > 0) {
+                    contextParts.push(`${idx + 1}. 主题: ${s.topics.slice(0, 3).join(', ')}`);
+                }
+                if (s.keyInsights && s.keyInsights.length > 0) {
+                    contextParts.push(`   要点: ${s.keyInsights.slice(0, 2).join('; ')}`);
+                }
             });
         }
         
-        contextParts.push('---开始对话---');
+        contextParts.push('\n=== 开始当前对话 ===');
         
         return contextParts.join('\n');
+    }
+
+    // 摘要最近对话
+    summarizeRecentConversation(messages) {
+        if (!messages || messages.length === 0) return '';
+        
+        const userMessages = messages.filter(m => m.role === 'user');
+        const assistantMessages = messages.filter(m => m.role === 'assistant');
+        
+        // 提取关键问题
+        const keyQuestions = userMessages.slice(-3).map(m => {
+            const text = m.content.trim();
+            return text.length > 50 ? text.substring(0, 50) + '...' : text;
+        });
+        
+        // 统计话题
+        const allText = messages.map(m => m.content).join('');
+        const topics = this.extractTopics(messages);
+        
+        let summary = [];
+        if (keyQuestions.length > 0) {
+            summary.push(`最近问题: ${keyQuestions.join(' | ')}`);
+        }
+        if (topics.length > 0) {
+            summary.push(`涉及主题: ${topics.slice(0, 5).join(', ')}`);
+        }
+        summary.push(`对话轮次: ${messages.length} (用户: ${userMessages.length}, AI: ${assistantMessages.length})`);
+        
+        return summary.join('\n');
     }
 
     async getRelevantSummaries(sessionId) {

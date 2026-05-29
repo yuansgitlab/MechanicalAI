@@ -324,6 +324,7 @@
     <script src="model-config.js"></script>
     <script src="long-term-memory.js"></script>
     <script src="question-bank.js"></script>
+    <script src="study-plans.js"></script>
     <script>
         let currentSession = null;
         let isInitialized = false;
@@ -334,13 +335,34 @@
                 await chatHistory.init();
                 await ltm.init();
                 await questionBank.init();
+                await studyPlans.init();
                 await loadHistoryList();
                 await startNewChat();
                 updateModelIndicator();
                 isInitialized = true;
+                
+                // 预加载记忆上下文（如果有历史会话）
+                await preloadMemoryContext();
             } catch (e) {
                 console.error('Init error:', e);
                 alert('初始化失败：' + e.message);
+            }
+        }
+        
+        // 预加载记忆上下文
+        async function preloadMemoryContext() {
+            try {
+                const stats = await ltm.getStats();
+                console.log('记忆系统状态:', stats);
+                
+                if (stats.knowledgeCount > 0) {
+                    console.log(`已加载 ${stats.knowledgeCount} 条知识条目`);
+                }
+                if (stats.summaryCount > 0) {
+                    console.log(`已加载 ${stats.summaryCount} 条对话摘要`);
+                }
+            } catch (e) {
+                console.error('预加载记忆失败:', e);
             }
         }
 
@@ -423,8 +445,25 @@
 
                 // 渲染计划
                 if (session.studyPlan) {
-                    document.getElementById('plan-container').innerHTML = marked.parse(session.studyPlan);
+                    const planContent = session.studyPlan.trim().startsWith('<')
+                        ? session.studyPlan
+                        : marked.parse(session.studyPlan);
+                    document.getElementById('plan-container').innerHTML = planContent + `
+                        <div class="mt-4 flex justify-center gap-3 pt-3 border-t border-white/10">
+                            <button onclick="saveStudyPlanToBank()" 
+                                    id="save-plan-btn"
+                                    class="btn btn-primary text-sm">
+                                <i data-lucide="bookmark-plus" class="w-4 h-4"></i>
+                                收藏到学习规划
+                            </button>
+                            <button onclick="openStudyPlansPage()" class="btn btn-secondary text-sm">
+                                <i data-lucide="calendar-check" class="w-4 h-4"></i>
+                                查看学习规划
+                            </button>
+                        </div>
+                    `;
                     renderMath(document.getElementById('plan-container'));
+                    lucide.createIcons();
                 }
 
                 await loadHistoryList();
@@ -518,12 +557,29 @@
                     console.log('Memory system not available, proceeding without:', memoryError);
                 }
                 
+                // 添加上下文提示，帮助AI更好地理解对话历史
+                const recentTopics = [];
+                if (currentSession.messages.length > 1) {
+                    const recentMsgs = currentSession.messages.slice(-6);
+                    const topics = ltm.extractTopics(recentMsgs);
+                    if (topics.length > 0) {
+                        recentTopics.push(...topics.slice(0, 3));
+                    }
+                    
+                    if (recentTopics.length > 0) {
+                        enhancedMessage = `【对话背景】\n近期讨论过: ${recentTopics.join(', ')}\n\n` + enhancedMessage;
+                    }
+                }
+                
+                // 获取对话历史（最近15条消息，包含当前问题）
+                const historyMessages = currentSession.messages.slice(-15, -1);
+                
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         message: enhancedMessage,
-                        history: currentSession.messages.slice(0, -1),  // 排除最后一条用户消息
+                        history: historyMessages,
                         api_key: config.apiKey,
                         api_url: config.apiUrl,
                         model: config.model
@@ -592,9 +648,10 @@
                     // 更新用户画像
                     await ltm.learnFromMessages(currentSession.messages);
                     
-                    // 定期生成摘要（每5条消息）
-                    if (currentSession.messages.length % 5 === 0) {
+                    // 定期生成摘要（每8条消息）
+                    if (currentSession.messages.length % 8 === 0) {
                         await ltm.generateSummary(currentSession?.id, currentSession.messages);
+                        console.log('对话摘要已生成并保存');
                     }
                 } catch (memoryError) {
                     console.log('Memory update failed:', memoryError);
@@ -623,9 +680,25 @@
                     const planContent = data.study_plan.trim().startsWith('<')
                         ? data.study_plan
                         : marked.parse(data.study_plan);
-                    document.getElementById('plan-container').innerHTML = planContent;
+                    
+                    // 渲染计划内容并添加收藏按钮
+                    document.getElementById('plan-container').innerHTML = planContent + `
+                        <div class="mt-4 flex justify-center gap-3 pt-3 border-t border-white/10">
+                            <button onclick="saveStudyPlanToBank()" 
+                                    id="save-plan-btn"
+                                    class="btn btn-primary text-sm">
+                                <i data-lucide="bookmark-plus" class="w-4 h-4"></i>
+                                收藏到学习规划
+                            </button>
+                            <button onclick="openStudyPlansPage()" class="btn btn-secondary text-sm">
+                                <i data-lucide="calendar-check" class="w-4 h-4"></i>
+                                查看学习规划
+                            </button>
+                        </div>
+                    `;
                     console.log('Rendering math in plan...');
                     renderMath(document.getElementById('plan-container'));
+                    lucide.createIcons();
                 }
 
                 // 更新会话标题
@@ -875,6 +948,145 @@
                     renderQuiz(currentSession.quiz);
                 }
             }
+        }
+
+        // 解析 Markdown 学习规划并保存
+        async function saveStudyPlanToBank() {
+            if (!currentSession || !currentSession.studyPlan) {
+                showToast('没有可收藏的学习规划');
+                return;
+            }
+
+            try {
+                // 解析学习规划文本
+                const planData = parseStudyPlan(currentSession.studyPlan);
+                
+                // 保存到学习规划库
+                const savedPlan = await studyPlans.savePlan(planData);
+                
+                // 更新按钮状态
+                const btn = document.getElementById('save-plan-btn');
+                if (btn) {
+                    btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> 已收藏';
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-secondary', 'text-green-400');
+                    btn.disabled = true;
+                    lucide.createIcons();
+                }
+                
+                showToast('学习规划已收藏！');
+            } catch (e) {
+                console.error('Save study plan error:', e);
+                showToast('收藏失败，请重试');
+            }
+        }
+
+        // 解析学习规划文本
+        function parseStudyPlan(planText) {
+            // 尝试从 Markdown 中提取标题和阶段
+            let title = '学习规划';
+            const phases = [];
+            
+            // 先去除 HTML 标签，只保留文本内容
+            let cleanText = planText.replace(/<[^>]*>/g, '');
+            
+            // 提取标题 - 查找第一行或第一个 # 标题
+            const titleMatch = cleanText.match(/^#+\s*(.+?)(?:\n|$)/) || cleanText.match(/^(.+?)(?:\n|$)/);
+            if (titleMatch) {
+                title = titleMatch[1].trim();
+            }
+            
+            // 尝试按阶段解析
+            // 模式1: 使用 ## 阶段标题
+            const phasePattern = /##+\s*(.+?)(?=\n##+|$)/gs;
+            let match;
+            
+            while ((match = phasePattern.exec(cleanText)) !== null) {
+                const phaseTitle = match[1].split('\n')[0].trim();
+                const phaseContent = match[1].substring(phaseTitle.length).trim();
+                
+                const tasks = extractTasks(phaseContent);
+                if (tasks.length > 0) {
+                    phases.push({
+                        name: phaseTitle,
+                        tasks: tasks
+                    });
+                }
+            }
+            
+            // 如果没有找到阶段，则尝试提取所有任务
+            if (phases.length === 0) {
+                const allTasks = extractTasks(cleanText);
+                if (allTasks.length > 0) {
+                    phases.push({
+                        name: '学习任务',
+                        tasks: allTasks
+                    });
+                }
+            }
+            
+            return {
+                title: title.substring(0, 50),
+                subject: '',
+                phases: phases
+            };
+        }
+
+        // 从文本中提取任务列表
+        function extractTasks(text) {
+            const tasks = [];
+            
+            // 匹配有序列表 (1. xxx)
+            const orderedListPattern = /^\d+\.\s*(.+?)(?=\n\d+\.|\n\n|$)/gm;
+            // 匹配无序列表 (- xxx 或 * xxx)
+            const unorderedListPattern = /^[-*]\s*(.+?)(?=\n[-*]|\n\n|$)/gm;
+            // 匹配复选框 (- [ ] xxx 或 * [ ] xxx)
+            const checkboxPattern = /^[-*]\s*\[\s*[xX]?\s*\]\s*(.+?)(?=\n[-*]|\n\n|$)/gm;
+            
+            let match;
+            
+            // 先尝试复选框
+            while ((match = checkboxPattern.exec(text)) !== null) {
+                if (match[1].trim()) {
+                    tasks.push({ text: match[1].trim() });
+                }
+            }
+            
+            // 如果没有复选框，尝试有序列表
+            if (tasks.length === 0) {
+                while ((match = orderedListPattern.exec(text)) !== null) {
+                    if (match[1].trim()) {
+                        tasks.push({ text: match[1].trim() });
+                    }
+                }
+            }
+            
+            // 如果还没有，尝试无序列表
+            if (tasks.length === 0) {
+                while ((match = unorderedListPattern.exec(text)) !== null) {
+                    if (match[1].trim()) {
+                        tasks.push({ text: match[1].trim() });
+                    }
+                }
+            }
+            
+            // 如果还是没有，按行分割提取
+            if (tasks.length === 0) {
+                const lines = text.split('\n').filter(line => line.trim());
+                lines.forEach(line => {
+                    const cleanLine = line.trim();
+                    if (cleanLine && cleanLine.length > 3) {
+                        tasks.push({ text: cleanLine });
+                    }
+                });
+            }
+            
+            return tasks;
+        }
+
+        // 打开学习规划页面
+        function openStudyPlansPage() {
+            window.open('study-plans.html', '_blank');
         }
 
         // 滚动到底部
