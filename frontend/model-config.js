@@ -9,12 +9,12 @@ const MODEL_PROVIDERS = {
         name: 'DeepSeek',
         icon: 'zap',
         color: 'purple',
-        apiUrl: 'https://api.deepseek.com/v1/chat/completions',
+        apiUrl: 'https://api.deepseek.com/chat/completions',
         models: [
-            { id: 'deepseek-chat', name: 'DeepSeek Chat' },
-            { id: 'deepseek-coder', name: 'DeepSeek Coder' }
+            { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash (快速)' },
+            { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro (强大)' }
         ],
-        defaultModel: 'deepseek-chat',
+        defaultModel: 'deepseek-v4-flash',
         description: '专注于代码和推理的强大模型'
     },
     kimi: {

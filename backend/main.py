@@ -21,7 +21,7 @@ app.add_middleware(
 
 # 从环境变量获取 API Key
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-API_URL = "https://api.deepseek.com/v1/chat/completions"
+API_URL = "https://api.deepseek.com/chat/completions"
 
 # ============================================
 # 评论系统数据结构
@@ -160,7 +160,7 @@ async def chat(request: ChatRequest):
     # 使用提供的配置或默认配置
     api_key = request.api_key or DEEPSEEK_API_KEY
     api_url = request.api_url or API_URL
-    model = request.model or "deepseek-chat"
+    model = request.model or "deepseek-v4-flash"
 
     if not api_key:
         raise HTTPException(status_code=500, detail="API Key not configured")
@@ -182,18 +182,26 @@ async def chat(request: ChatRequest):
 
     async with httpx.AsyncClient() as client:
         try:
+            # 构建 API 请求体，增加思考模式支持
+            request_body = {
+                "model": model,
+                "messages": messages,
+                "response_format": {"type": "json_object"},
+                "temperature": 0.7
+            }
+            
+            # 如果是 pro 模型，增加思考模式
+            if "pro" in model.lower():
+                request_body["reasoning_effort"] = "high"
+                request_body["extra_body"] = {"thinking": {"type": "enabled"}}
+            
             response = await client.post(
                 api_url,
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json"
                 },
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "response_format": {"type": "json_object"},
-                    "temperature": 0.7
-                },
+                json=request_body,
                 timeout=60.0
             )
             
