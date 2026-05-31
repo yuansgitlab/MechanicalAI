@@ -1,0 +1,11 @@
+{
+  "name": "mechanical-ai",
+  "version": "1.0.0",
+  "description": "Mechanical AI - Engineering Learning Assistant",
+  "scripts": {
+    "build": "echo 'Static site, no build required'"
+  },
+  "keywords": ["education", "engineering", "ai"],
+  "author": "",
+  "license": "MIT"
+}

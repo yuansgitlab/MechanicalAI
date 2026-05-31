@@ -18,7 +18,7 @@ particlesJS("particles-js", {
 
 lucide.createIcons();
 marked.setOptions({ gfm: true, breaks: true });
-const API_URL = 'https://yuangitlab-mechanical-ai-api.hf.space/api/chat';
+const API_URL = '/api/chat';
 
 // 对话历史管理
 const messageHistory = [];

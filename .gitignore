@@ -68,6 +68,7 @@ _site/
 *.html
 !frontend/*.html
 
-# Markdown files (exclude all but README.md)
+# Markdown files (exclude all but README.md and DEPLOYMENT.md)
 *.md
 !README.md
+!DEPLOYMENT.md
