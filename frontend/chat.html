@@ -74,6 +74,129 @@
         </div>
     </div>
 
+    <!-- 使用教程弹窗 -->
+    <div id="tutorial-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div class="bg-neutral-900 border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <!-- 弹窗头部 -->
+            <div class="p-6 border-b border-white/10">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl flex items-center justify-center">
+                            <i data-lucide="sparkles" class="text-white w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">欢迎使用 MechanicalAI</h2>
+                            <p class="text-slate-400 text-sm">快速了解如何开始学习</p>
+                        </div>
+                    </div>
+                    <button onclick="closeTutorial()" class="text-slate-400 hover:text-white transition">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 弹窗内容 -->
+            <div class="p-6 space-y-6">
+                <!-- 第一步：开始对话 -->
+                <div class="flex gap-4">
+                    <div class="w-10 h-10 bg-purple-600/20 rounded-lg flex items-center justify-center shrink-0">
+                        <span class="text-purple-400 font-bold">1</span>
+                    </div>
+                    <div>
+                        <h3 class="text-white font-semibold mb-2">点击开始对话</h3>
+                        <p class="text-slate-400 text-sm">在左侧点击"新建对话"按钮，开启一段新的学习旅程</p>
+                    </div>
+                </div>
+
+                <!-- 第二步：提问 -->
+                <div class="flex gap-4">
+                    <div class="w-10 h-10 bg-purple-600/20 rounded-lg flex items-center justify-center shrink-0">
+                        <span class="text-purple-400 font-bold">2</span>
+                    </div>
+                    <div>
+                        <h3 class="text-white font-semibold mb-2">向AI提出你的问题</h3>
+                        <p class="text-slate-400 text-sm">描述你的学习困惑，比如："解释拉普拉斯变换的物理意义"或"PID控制器的原理"</p>
+                    </div>
+                </div>
+
+                <!-- 第三步：获得诊断和练习 -->
+                <div class="flex gap-4">
+                    <div class="w-10 h-10 bg-orange-600/20 rounded-lg flex items-center justify-center shrink-0">
+                        <span class="text-orange-400 font-bold">3</span>
+                    </div>
+                    <div>
+                        <h3 class="text-white font-semibold mb-2">获取诊断报告 &amp; 练习题</h3>
+                        <p class="text-slate-400 text-sm">AI会分析你的知识盲区，生成诊断报告。你可以要求："根据这个知识点出几道练习题"来巩固学习</p>
+                    </div>
+                </div>
+
+                <!-- 第四步：定制学习规划 -->
+                <div class="flex gap-4">
+                    <div class="w-10 h-10 bg-emerald-600/20 rounded-lg flex items-center justify-center shrink-0">
+                        <span class="text-emerald-400 font-bold">4</span>
+                    </div>
+                    <div>
+                        <h3 class="text-white font-semibold mb-2">定制专属学习规划</h3>
+                        <p class="text-slate-400 text-sm">要求AI为你制定学习计划，比如："帮我制定一个控制工程的学习规划"或"设计一周的复习计划"</p>
+                    </div>
+                </div>
+
+                <!-- 其他功能说明 -->
+                <div class="bg-purple-900/10 rounded-xl p-4 border border-purple-500/20">
+                    <h4 class="text-purple-400 font-semibold mb-3 flex items-center gap-2">
+                        <i data-lucide="bookmark" class="w-4 h-4"></i>
+                        其他功能
+                    </h4>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex items-start gap-2">
+                            <i data-lucide="check-circle" class="w-4 h-4 text-green-400 mt-0.5 shrink-0"></i>
+                            <div>
+                                <span class="text-white font-medium">个人题库</span>
+                                <p class="text-slate-400">收藏AI生成的练习题，随时复习巩固</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <i data-lucide="check-circle" class="w-4 h-4 text-green-400 mt-0.5 shrink-0"></i>
+                            <div>
+                                <span class="text-white font-medium">学习规划</span>
+                                <p class="text-slate-400">保存学习计划，追踪进度，完成任务可打勾标记</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <i data-lucide="check-circle" class="w-4 h-4 text-green-400 mt-0.5 shrink-0"></i>
+                            <div>
+                                <span class="text-white font-medium">AI记忆</span>
+                                <p class="text-slate-400">设置你的学习偏好，收藏重要对话，AI会记住你的习惯</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 提示 -->
+                <div class="bg-yellow-900/10 rounded-xl p-4 border border-yellow-500/20">
+                    <p class="text-yellow-400 text-sm flex items-start gap-2">
+                        <i data-lucide="lightbulb" class="w-4 h-4 mt-0.5 shrink-0"></i>
+                        <span><strong>小提示：</strong>在AI记忆页面可以定制你的学习风格，选择解释详细程度、技术难度等，AI会更懂你！</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- 弹窗底部 -->
+            <div class="p-6 border-t border-white/10">
+                <div class="flex gap-3">
+                    <button onclick="closeTutorial()" class="btn btn-primary flex-1">
+                        <i data-lucide="message-circle" class="w-4 h-4"></i>
+                        开始对话
+                    </button>
+                    <button onclick="closeTutorial(); setTimeout(() => window.location.href='memory-system.html', 300);" class="btn btn-secondary">
+                        <i data-lucide="sliders" class="w-4 h-4"></i>
+                        定制AI画像
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <main class="chat-layout relative z-10">
         <div class="chat-main">
             <!-- Mobile sidebar toggle button -->
@@ -1608,6 +1731,7 @@
 
         // 事件监听
         document.addEventListener('DOMContentLoaded', function() {
+            checkTutorialShown();
             initChat();
             
             document.getElementById('user-input').addEventListener('keypress', function(e) {
@@ -1687,6 +1811,32 @@
                 }
             }
         });
+
+        // 关闭教程弹窗
+        function closeTutorial() {
+            const modal = document.getElementById('tutorial-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+                localStorage.setItem('tutorialShown', 'true');
+            }
+        }
+
+        // 检查是否显示过教程
+        function checkTutorialShown() {
+            const shown = localStorage.getItem('tutorialShown');
+            if (shown === 'true') {
+                const modal = document.getElementById('tutorial-modal');
+                if (modal) {
+                    modal.classList.add('hidden');
+                }
+            }
+        }
+
+        // 跳转到AI画像定制
+        function goToPortrait() {
+            closeTutorial();
+            window.location.href = 'memory-system.html';
+        }
     </script>
     <style>
         .history-item {
