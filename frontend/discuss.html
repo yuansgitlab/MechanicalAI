@@ -187,7 +187,9 @@
         let currentCategory = 'all';
         let currentSort = 'latest';
         let comments = [];
+        let likedComments = [];
         const STORAGE_KEY = 'mechanicalai-comments';
+        const LIKES_KEY = 'mechanicalai-likes';
 
         const categoryLabels = {
             'control': '控制工程',
@@ -204,9 +206,16 @@
                 if (stored) {
                     comments = JSON.parse(stored);
                 }
+                const storedLikes = localStorage.getItem(LIKES_KEY);
+                if (storedLikes) {
+                    likedComments = JSON.parse(storedLikes);
+                }
                 // 确保有数据
                 if (!Array.isArray(comments)) {
                     comments = [];
+                }
+                if (!Array.isArray(likedComments)) {
+                    likedComments = [];
                 }
             } catch (e) {
                 console.error('Failed to load from storage:', e);
@@ -218,6 +227,7 @@
         function saveToStorage() {
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(comments));
+                localStorage.setItem(LIKES_KEY, JSON.stringify(likedComments));
             } catch (e) {
                 console.error('Failed to save to storage:', e);
             }
@@ -292,7 +302,7 @@
                         <span class="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs">${categoryLabels[comment.category]}</span>
                     </div>
                     <div class="discussion-actions mt-4">
-                        <button class="discussion-action" onclick="likeComment('${comment.id}')" aria-label="点赞">
+                        <button class="discussion-action ${likedComments.includes(comment.id) ? 'text-red-400' : ''}" onclick="likeComment('${comment.id}')" aria-label="点赞">
                             <i data-lucide="thumbs-up" class="w-4 h-4" aria-hidden="true"></i>
                             <span id="likes-${comment.id}">${comment.likes}</span>
                         </button>
@@ -354,7 +364,16 @@
         function likeComment(commentId) {
             const comment = comments.find(c => c.id === commentId);
             if (comment) {
-                comment.likes += 1;
+                const isLiked = likedComments.includes(commentId);
+                if (isLiked) {
+                    // 取消点赞
+                    comment.likes = Math.max(0, comment.likes - 1);
+                    likedComments = likedComments.filter(id => id !== commentId);
+                } else {
+                    // 点赞
+                    comment.likes += 1;
+                    likedComments.push(commentId);
+                }
                 saveToStorage();
                 renderComments();
             }

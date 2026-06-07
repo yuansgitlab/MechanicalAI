@@ -557,6 +557,16 @@
                     console.log('Memory system not available, proceeding without:', memoryError);
                 }
                 
+                // 添加用户偏好设置
+                try {
+                    const preferencesContext = await getUserPreferencesContext();
+                    if (preferencesContext) {
+                        enhancedMessage = preferencesContext + '\n\n' + enhancedMessage;
+                    }
+                } catch (prefError) {
+                    console.log('Preferences not available:', prefError);
+                }
+                
                 // 添加上下文提示，帮助AI更好地理解对话历史
                 const recentTopics = [];
                 if (currentSession.messages.length > 1) {
@@ -764,11 +774,32 @@
             } else {
                 msgDiv.className = 'bot-msg animate-in';
                 // 如果 text 已经是 HTML，直接使用，否则用 marked 解析
+                let content = '';
                 if (text.startsWith('<')) {
-                    msgDiv.innerHTML = text;
+                    content = text;
                 } else {
-                    msgDiv.innerHTML = marked.parse(text);
+                    content = marked.parse(text);
                 }
+                
+                // 添加书签按钮
+                const bookmarkHTML = `
+                    <div class="flex items-center justify-end mt-3 pt-3 border-t border-white/10">
+                        <button onclick="bookmarkMessage('${id}', \`${encodeURIComponent(text)}\`)" 
+                                class="flex items-center gap-2 text-xs text-slate-400 hover:text-purple-400 transition"
+                                id="bookmark-btn-${id}">
+                            <i data-lucide="bookmark-plus" class="w-4 h-4"></i>
+                            收藏到书签
+                        </button>
+                        <button onclick="openMemoryPage()" 
+                                class="flex items-center gap-2 text-xs text-slate-400 hover:text-purple-400 transition ml-4">
+                            <i data-lucide="bookmark" class="w-4 h-4"></i>
+                            查看书签
+                        </button>
+                    </div>
+                `;
+                
+                msgDiv.innerHTML = content + bookmarkHTML;
+                
                 if (shouldSave && currentSession) {
                     currentSession.messages.push({ role: 'assistant', content: text });
                 }
@@ -947,6 +978,130 @@
                 if (currentSession && currentSession.quiz) {
                     renderQuiz(currentSession.quiz);
                 }
+            }
+        }
+
+        // 收藏消息到书签
+        async function bookmarkMessage(msgId, content) {
+            if (!currentSession) {
+                showToast('无法收藏，请先开始对话');
+                return;
+            }
+            
+            try {
+                const decodedContent = decodeURIComponent(content);
+                const summary = await generateMessageSummary(decodedContent);
+                
+                const bookmarkData = {
+                    id: 'bookmark-' + Date.now(),
+                    messageId: msgId,
+                    content: decodedContent,
+                    summary: summary,
+                    timestamp: new Date().toISOString(),
+                    sessionId: currentSession.id,
+                    topic: extractTopicFromContent(decodedContent)
+                };
+                
+                await ltm.bookmarkMessage(bookmarkData.id, bookmarkData);
+                
+                // 更新按钮状态
+                const btn = document.getElementById(`bookmark-btn-${msgId}`);
+                if (btn) {
+                    btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> 已收藏';
+                    btn.classList.remove('text-slate-400', 'hover:text-purple-400');
+                    btn.classList.add('text-green-400');
+                    btn.disabled = true;
+                    lucide.createIcons();
+                }
+                
+                showToast('已收藏到书签！');
+            } catch (e) {
+                console.error('Bookmark error:', e);
+                showToast('收藏失败，请重试');
+            }
+        }
+
+        // 生成消息摘要
+        async function generateMessageSummary(content) {
+            // 简单的摘要生成逻辑
+            const maxLength = 150;
+            let summary = content.replace(/<[^>]*>/g, '').trim();
+            
+            if (summary.length > maxLength) {
+                summary = summary.substring(0, maxLength) + '...';
+            }
+            
+            // 提取要点
+            const sentences = summary.split(/[。！？.!?\n]/).filter(s => s.trim().length > 0);
+            const keyPoints = sentences.slice(0, 3).map(s => s.trim()).filter(s => s.length > 0);
+            
+            return keyPoints.length > 0 ? keyPoints.join('；') : summary;
+        }
+
+        // 从内容中提取主题
+        function extractTopicFromContent(content) {
+            const keywords = ['控制工程', '机械设计', '电子电路', '信号处理', '数学', '物理', 
+                             'PID', '拉普拉斯', '傅里叶', '系统', '方程', '定理'];
+            
+            for (const keyword of keywords) {
+                if (content.includes(keyword)) {
+                    return keyword;
+                }
+            }
+            
+            return '未分类';
+        }
+
+        // 打开记忆页面
+        function openMemoryPage() {
+            window.open('memory-system.html', '_blank');
+        }
+
+        // 获取用户偏好设置上下文
+        async function getUserPreferencesContext() {
+            try {
+                // 从记忆系统获取偏好设置
+                const detailLevel = await ltm.getPreference('detailLevel', 'medium');
+                const difficulty = await ltm.getPreference('difficulty', 'intermediate');
+                const useFormulas = await ltm.getPreference('useFormulas', 'yes');
+                const teachingStyle = await ltm.getPreference('teachingStyle', 'standard');
+                
+                const levels = {
+                    beginner: '面向初学者，避免复杂术语',
+                    intermediate: '面向有一定基础的学习者',
+                    advanced: '面向高级学习者，深入探讨'
+                };
+                
+                const details = {
+                    simple: '回答简洁，重点突出',
+                    medium: '回答详细程度适中',
+                    detailed: '回答尽可能详细，包含背景知识'
+                };
+                
+                const formulaPrefs = {
+                    yes: '尽量使用数学公式和符号，用LaTeX格式',
+                    sometimes: '适当使用公式，以文字说明为主',
+                    no: '尽量避免复杂公式，多用文字说明'
+                };
+                
+                const styles = {
+                    standard: '标准讲解方式',
+                    example: '多举实例，通过例子说明概念',
+                    stepbystep: '分步骤讲解，每个步骤清晰明了',
+                    interactive: '互动式教学，经常提问检查理解'
+                };
+                
+                let context = '【教学偏好】\n';
+                context += `${levels[difficulty]}\n';
+                context += `${details[detailLevel]}\n`;
+                context += `${formulaPrefs[useFormulas]}\n`;
+                context += `${styles[teachingStyle]}\n`;
+                context += '请根据以上偏好设置来调整你的回答方式。';
+                
+                return context;
+            } catch (e) {
+                console.error('Failed to get preferences:', e);
+                return null;
             }
         }
 

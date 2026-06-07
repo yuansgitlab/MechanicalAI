@@ -213,7 +213,7 @@
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm text-slate-400 mb-2">解释详细程度</label>
-                                    <select id="pref-detail" class="form-input" onchange="savePreference('detailLevel', this.value)">
+                                    <select id="pref-detail" class="form-input" onchange="savePreference('detailLevel', this.value); updatePromptPreview();">
                                         <option value="simple">简洁</option>
                                         <option value="medium" selected>适中</option>
                                         <option value="detailed">详细</option>
@@ -221,20 +221,41 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm text-slate-400 mb-2">技术难度</label>
-                                    <select id="pref-difficulty" class="form-input" onchange="savePreference('difficulty', this.value)">
+                                    <select id="pref-difficulty" class="form-input" onchange="savePreference('difficulty', this.value); updatePromptPreview();">
                                         <option value="beginner">入门</option>
                                         <option value="intermediate" selected>中级</option>
                                         <option value="advanced">高级</option>
                                     </select>
                                 </div>
                             </div>
-                            <div>
-                                <label class="block text-sm text-slate-400 mb-2">是否使用公式</label>
-                                <select id="pref-formulas" class="form-input" onchange="savePreference('useFormulas', this.value)">
-                                    <option value="yes" selected>是，尽可能多用</option>
-                                    <option value="sometimes">有时</option>
-                                    <option value="no">否，尽量少用</option>
-                                </select>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm text-slate-400 mb-2">是否使用公式</label>
+                                    <select id="pref-formulas" class="form-input" onchange="savePreference('useFormulas', this.value); updatePromptPreview();">
+                                        <option value="yes" selected>是，尽可能多用</option>
+                                        <option value="sometimes">有时</option>
+                                        <option value="no">否，尽量少用</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-slate-400 mb-2">教学风格</label>
+                                    <select id="pref-style" class="form-input" onchange="savePreference('teachingStyle', this.value); updatePromptPreview();">
+                                        <option value="standard" selected>标准讲解</option>
+                                        <option value="example">多举例说明</option>
+                                        <option value="stepbystep">分步骤讲解</option>
+                                        <option value="interactive">互动式</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="pt-4 border-t border-white/10">
+                                <h4 class="text-sm font-semibold text-slate-300 mb-3 flex items-center">
+                                    <i data-lucide="code" class="w-4 h-4 mr-2"></i>提示词工程预览
+                                </h4>
+                                <div class="bg-black/30 p-3 rounded-lg border border-white/10">
+                                    <pre class="text-xs text-slate-400 whitespace-pre-wrap" id="prompt-preview">
+加载中...
+                                    </pre>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -412,20 +433,55 @@
             
             empty.classList.add('hidden');
             
-            list.innerHTML = items.map(item => `
+            list.innerHTML = items.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map(item => `
                 <div class="glass-card p-4">
-                    <div class="flex items-start justify-between mb-2">
-                        <span class="text-xs text-slate-500">
-                            ${new Date(item.timestamp).toLocaleString('zh-CN')}
-                        </span>
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs px-2 py-1 rounded-full bg-purple-600/20 text-purple-300 border border-purple-500/30">
+                                ${item.topic || '未分类'}
+                            </span>
+                            <span class="text-xs text-slate-500">
+                                ${new Date(item.timestamp).toLocaleString('zh-CN')}
+                            </span>
+                        </div>
                         <button onclick="deleteBookmark('${item.id}')" class="text-slate-400 hover:text-red-400">
                             <i data-lucide="trash-2" class="w-4 h-4"></i>
                         </button>
                     </div>
-                    <p class="text-slate-200">${item.content}</p>
+                    ${item.summary ? `
+                        <div class="mb-3 p-3 bg-purple-900/10 rounded-lg border border-purple-500/20">
+                            <p class="text-sm text-purple-300 mb-1"><i data-lucide="star" class="w-3 h-3 inline mr-1"></i> AI 摘要</p>
+                            <p class="text-sm text-slate-300">${item.summary}</p>
+                        </div>
+                    ` : ''}
+                    <div class="text-slate-200">
+                        ${item.content.length > 300 ? item.content.substring(0, 300) + '...' : item.content}
+                    </div>
+                    ${item.content.length > 300 ? `
+                        <button onclick="toggleBookmarkContent('${item.id}')" class="text-xs text-purple-400 mt-2 hover:text-purple-300" id="toggle-${item.id}">
+                            展开全部
+                        </button>
+                        <div id="full-content-${item.id}" class="hidden text-slate-200 mt-2 pt-2 border-t border-white/10">
+                            ${item.content.substring(300)}
+                        </div>
+                    ` : ''}
                 </div>
             `).join('');
             lucide.createIcons();
+        }
+
+        // 切换书签内容展开/收起
+        function toggleBookmarkContent(id) {
+            const fullContent = document.getElementById(`full-content-${id}`);
+            const toggleBtn = document.getElementById(`toggle-${id}`);
+            
+            if (fullContent.classList.contains('hidden')) {
+                fullContent.classList.remove('hidden');
+                toggleBtn.textContent = '收起';
+            } else {
+                fullContent.classList.add('hidden');
+                toggleBtn.textContent = '展开全部';
+            }
         }
 
         // 删除书签
@@ -572,10 +628,72 @@
             const detail = await ltm.getPreference('detailLevel', 'medium');
             const difficulty = await ltm.getPreference('difficulty', 'intermediate');
             const formulas = await ltm.getPreference('useFormulas', 'yes');
+            const style = await ltm.getPreference('teachingStyle', 'standard');
             
             document.getElementById('pref-detail').value = detail;
             document.getElementById('pref-difficulty').value = difficulty;
             document.getElementById('pref-formulas').value = formulas;
+            document.getElementById('pref-style').value = style;
+            
+            updatePromptPreview();
+        }
+
+        // 更新提示词预览
+        async function updatePromptPreview() {
+            const detail = document.getElementById('pref-detail').value;
+            const difficulty = document.getElementById('pref-difficulty').value;
+            const formulas = document.getElementById('pref-formulas').value;
+            const style = document.getElementById('pref-style').value;
+            
+            const prompt = generateSystemPrompt(detail, difficulty, formulas, style);
+            document.getElementById('prompt-preview').textContent = prompt;
+        }
+
+        // 生成系统提示词
+        function generateSystemPrompt(detailLevel, difficulty, useFormulas, teachingStyle) {
+            const levels = {
+                beginner: '面向初学者，避免复杂术语',
+                intermediate: '面向有一定基础的学习者',
+                advanced: '面向高级学习者，深入探讨'
+            };
+            
+            const details = {
+                simple: '回答简洁，重点突出',
+                medium: '回答详细程度适中',
+                detailed: '回答尽可能详细，包含背景知识'
+            };
+            
+            const formulaPrefs = {
+                yes: '尽量使用数学公式和符号，用LaTeX格式',
+                sometimes: '适当使用公式，以文字说明为主',
+                no: '尽量避免复杂公式，多用文字说明'
+            };
+            
+            const styles = {
+                standard: '标准讲解方式',
+                example: '多举实例，通过例子说明概念',
+                stepbystep: '分步骤讲解，每个步骤清晰明了',
+                interactive: '互动式教学，经常提问检查理解'
+            };
+            
+            return `你是一位专业的工科教学助手，擅长控制工程、机械设计、电子电路等领域的教学。
+
+${levels[difficulty]}
+
+${details[detailLevel]}
+
+${formulaPrefs[useFormulas]}
+
+${styles[teachingStyle]}
+
+请遵循以下要求：
+1. 回答要准确、清晰、有条理
+2. 提供实用的建议和解题技巧
+3. 如果用户问题不明确，请主动询问更多细节
+4. 支持多种格式的内容输出（文字、公式、列表、代码等）
+5. 保持耐心和友好的态度
+
+你的目标是帮助用户真正理解知识，而不只是给出答案。`;
         }
 
         // 保存偏好
