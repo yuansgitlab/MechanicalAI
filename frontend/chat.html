@@ -532,7 +532,7 @@
             loadingDiv.innerHTML = `
                 <div class="flex gap-2 items-center">
                     <div class="w-2 h-2 bg-purple-600 rounded-full animate-bounce"></div>
-                    <span>教授正在思考...</span>
+                    <span>AI正在思考...</span>
                 </div>
             `;
             chatContainer.appendChild(loadingDiv);
@@ -1092,10 +1092,11 @@
                 };
                 
                 let context = '【教学偏好】\n';
-                context += `${levels[difficulty]}\n';
+                context += `${levels[difficulty]}\n`;
                 context += `${details[detailLevel]}\n`;
                 context += `${formulaPrefs[useFormulas]}\n`;
                 context += `${styles[teachingStyle]}\n`;
+                context += '\n你是一位专业的工科教学助手，可以处理任何工科领域的问题。\n';
                 context += '请根据以上偏好设置来调整你的回答方式。';
                 
                 return context;
@@ -1187,7 +1188,66 @@
             };
         }
 
-        // 从文本中提取任务列表
+        // 解析任务详情（提取知识点、时长、建议）
+        function parseTaskDetail(taskText) {
+            const task = {
+                text: taskText,
+                knowledgePoint: '',
+                duration: '',
+                suggestion: ''
+            };
+            
+            // 提取时长（支持多种格式）
+            const durationPatterns = [
+                /(\d+)\s*(小时|h|小时学习)/i,
+                /(\d+)\s*(分钟|min|分钟学习)/i,
+                /学习时间[\s：:](\d+)\s*(小时|分钟)/i,
+                /建议用时[\s：:](\d+)\s*(小时|分钟)/i
+            ];
+            
+            for (const pattern of durationPatterns) {
+                const durationMatch = taskText.match(pattern);
+                if (durationMatch) {
+                    task.duration = `${durationMatch[1]}${durationMatch[2]}`;
+                    break;
+                }
+            }
+            
+            // 提取知识点
+            const knowledgePatterns = [
+                /知识点[\s：:](.+?)(?=[。，,；;]|$)/i,
+                /掌握[\s：:](.+?)(?=[。，,；;]|$)/i,
+                /学习[\s：:](.+?)(?=[。，,；;]|$)/i,
+                /理解[\s：:](.+?)(?=[。，,；;]|$)/i
+            ];
+            
+            for (const pattern of knowledgePatterns) {
+                const knowledgeMatch = taskText.match(pattern);
+                if (knowledgeMatch) {
+                    task.knowledgePoint = knowledgeMatch[1].trim();
+                    break;
+                }
+            }
+            
+            // 提取建议
+            const suggestionPatterns = [
+                /建议[\s：:](.+?)(?=[。，,；;]|$)/i,
+                /提示[\s：:](.+?)(?=[。，,；;]|$)/i,
+                /注意[\s：:](.+?)(?=[。，,；;]|$)/i
+            ];
+            
+            for (const pattern of suggestionPatterns) {
+                const suggestionMatch = taskText.match(pattern);
+                if (suggestionMatch) {
+                    task.suggestion = suggestionMatch[1].trim();
+                    break;
+                }
+            }
+            
+            return task;
+        }
+
+        // 从文本中提取任务列表（支持知识点、时长、建议）
         function extractTasks(text) {
             const tasks = [];
             
@@ -1203,7 +1263,8 @@
             // 先尝试复选框
             while ((match = checkboxPattern.exec(text)) !== null) {
                 if (match[1].trim()) {
-                    tasks.push({ text: match[1].trim() });
+                    const taskData = parseTaskDetail(match[1].trim());
+                    tasks.push(taskData);
                 }
             }
             
@@ -1211,7 +1272,8 @@
             if (tasks.length === 0) {
                 while ((match = orderedListPattern.exec(text)) !== null) {
                     if (match[1].trim()) {
-                        tasks.push({ text: match[1].trim() });
+                        const taskData = parseTaskDetail(match[1].trim());
+                        tasks.push(taskData);
                     }
                 }
             }
@@ -1220,7 +1282,8 @@
             if (tasks.length === 0) {
                 while ((match = unorderedListPattern.exec(text)) !== null) {
                     if (match[1].trim()) {
-                        tasks.push({ text: match[1].trim() });
+                        const taskData = parseTaskDetail(match[1].trim());
+                        tasks.push(taskData);
                     }
                 }
             }

@@ -65,7 +65,7 @@ async function sendMessage() {
     appendMessage('user', text);
     input.value = '';
     
-    const loadingId = appendMessage('bot', `<div class="flex gap-2 items-center"><div class="w-2 h-2 bg-purple-600 rounded-full animate-bounce"></div>教授正在思考...</div>`);
+    const loadingId = appendMessage('bot', `<div class="flex gap-2 items-center"><div class="w-2 h-2 bg-purple-600 rounded-full animate-bounce"></div>AI正在思考...</div>`);
 
     try {
         // 构建包含历史对话的请求

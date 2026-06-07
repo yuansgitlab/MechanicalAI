@@ -374,7 +374,31 @@
 
         document.getElementById('discussion-form').addEventListener('submit', function(e) {
             e.preventDefault();
-            alert('讨论发布功能开发中...');
+            const author = document.getElementById('discussion-author').value;
+            const topic = document.getElementById('discussion-topic').value;
+            const content = document.getElementById('discussion-content').value;
+            
+            if (!author || !topic || !content) {
+                alert('请填写完整信息');
+                return;
+            }
+            
+            const comments = JSON.parse(localStorage.getItem('mechanicalai-comments') || '[]');
+            const newComment = {
+                id: Date.now().toString(),
+                author: author,
+                topic: topic,
+                content: content,
+                category: 'general',
+                timestamp: new Date().toISOString(),
+                likes: 0,
+                replies: []
+            };
+            comments.unshift(newComment);
+            localStorage.setItem('mechanicalai-comments', JSON.stringify(comments));
+            
+            document.getElementById('discussion-form').reset();
+            alert('讨论发布成功！');
         });
 
         const observerOptions = {
