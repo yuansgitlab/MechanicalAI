@@ -1129,3 +1129,493 @@ a:focus-visible {
 .prose-invert nav a:hover {
     color: var(--accent-pink);
 }
+
+/* ========================================
+   Mobile Navigation & Responsive Enhancements
+   ======================================== */
+
+/* Mobile menu toggle button */
+.mobile-menu-toggle {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    padding: 0.5rem;
+    cursor: pointer;
+    z-index: 1001;
+}
+
+.mobile-menu-toggle:hover {
+    color: var(--accent-purple);
+}
+
+/* Mobile navigation overlay */
+.mobile-nav-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(20px);
+    z-index: 999;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.mobile-nav-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.mobile-nav {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 280px;
+    max-width: 85vw;
+    height: 100%;
+    background: var(--bg-secondary);
+    padding: 5rem 2rem 2rem;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    z-index: 1000;
+    border-left: 1px solid var(--border-subtle);
+}
+
+.mobile-nav-overlay.active .mobile-nav {
+    transform: translateX(0);
+}
+
+.mobile-nav-close {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    padding: 0.5rem;
+    cursor: pointer;
+}
+
+.mobile-nav-links {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.mobile-nav-links li {
+    width: 100%;
+}
+
+.mobile-nav-links a {
+    display: block;
+    padding: 1rem 1.5rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-weight: 500;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+}
+
+.mobile-nav-links a:hover,
+.mobile-nav-links a.active {
+    background: rgba(147, 51, 234, 0.1);
+    color: var(--accent-purple);
+}
+
+.mobile-nav-actions {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.mobile-nav-actions .btn {
+    width: 100%;
+}
+
+/* ========================================
+   Chat Mobile Responsive
+   ======================================== */
+
+@media (max-width: 768px) {
+    /* Navigation */
+    .mobile-menu-toggle {
+        display: block;
+    }
+
+    .nav-links {
+        display: none;
+    }
+
+    .nav-actions {
+        display: none;
+    }
+
+    .navbar {
+        padding: 0.75rem 1rem;
+    }
+
+    .navbar-content {
+        gap: 1rem;
+    }
+
+    .logo-icon {
+        width: 32px;
+        height: 32px;
+    }
+
+    .logo-text {
+        font-size: 1rem;
+    }
+
+    /* Chat layout */
+    body {
+        overflow-y: auto;
+    }
+
+    .chat-layout {
+        padding-top: 60px;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    .chat-main {
+        grid-template-columns: 1fr !important;
+        padding: 0.75rem !important;
+        gap: 0 !important;
+        height: calc(100vh - 60px);
+        position: relative;
+    }
+
+    /* Mobile sidebar toggle */
+    .sidebar-toggle {
+        position: fixed;
+        top: 70px;
+        left: 1rem;
+        z-index: 100;
+        width: 44px;
+        height: 44px;
+        background: var(--bg-glass);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .sidebar-toggle:hover {
+        border-color: var(--accent-purple);
+    }
+
+    /* Sidebar for mobile */
+    .chat-sidebar {
+        position: fixed !important;
+        left: 0;
+        top: 0;
+        width: 280px;
+        max-width: 85vw;
+        height: 100vh;
+        z-index: 200;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        border-radius: 0 24px 24px 0 !important;
+    }
+
+    .chat-sidebar.active {
+        transform: translateX(0);
+    }
+
+    /* Overlay for sidebar */
+    .sidebar-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 199;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+    }
+
+    .sidebar-overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    /* Chat content area */
+    .chat-main-right {
+        padding: 0 !important;
+        height: 100% !important;
+        gap: 1rem !important;
+    }
+
+    .chat-content {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    #chat-container {
+        padding: 1rem !important;
+        border-radius: 16px !important;
+    }
+
+    /* Messages */
+    .bot-msg,
+    .user-msg {
+        font-size: 0.95rem;
+        padding: 0.875rem 1rem !important;
+    }
+
+    /* Input area */
+    .chat-input-area {
+        padding: 1rem !important;
+    }
+
+    .chat-input {
+        padding: 0.875rem 3.5rem 0.875rem 1rem !important;
+        font-size: 0.95rem;
+    }
+
+    .chat-send-btn {
+        width: 40px;
+        height: 40px;
+        right: 0.375rem !important;
+        padding: 0.5rem !important;
+    }
+
+    /* Hero & Sections */
+    .hero {
+        min-height: 80vh !important;
+        padding: 5rem 1rem 3rem !important;
+    }
+
+    .hero-title {
+        font-size: 2rem !important;
+    }
+
+    .hero-subtitle {
+        font-size: 1rem !important;
+    }
+
+    .hero-actions {
+        flex-direction: column;
+    }
+
+    .hero-actions .btn {
+        width: 100%;
+    }
+
+    /* Features */
+    .features {
+        padding: 4rem 1rem !important;
+    }
+
+    .features-grid {
+        grid-template-columns: 1fr !important;
+        gap: 1.5rem !important;
+    }
+
+    .feature-card {
+        padding: 1.5rem !important;
+    }
+
+    /* About */
+    .about {
+        padding: 4rem 1rem !important;
+    }
+
+    .about-content h2 {
+        font-size: 1.75rem !important;
+    }
+
+    /* Discussion */
+    .discussion {
+        padding: 4rem 1rem !important;
+    }
+
+    .discussion-form {
+        padding: 1.5rem !important;
+    }
+
+    .discussion-item {
+        padding: 1.25rem !important;
+    }
+
+    .discussion-header {
+        flex-wrap: wrap;
+        gap: 0.75rem !important;
+    }
+
+    /* Buttons */
+    .btn {
+        padding: 0.625rem 1.25rem !important;
+        font-size: 0.875rem !important;
+    }
+
+    /* Grid layouts */
+    .about-grid {
+        grid-template-columns: 1fr !important;
+        gap: 2rem !important;
+    }
+
+    .about-stats {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 1rem !important;
+    }
+
+    .footer-content {
+        grid-template-columns: 1fr !important;
+        gap: 2rem !important;
+    }
+
+    /* Glass cards */
+    .glass-card {
+        border-radius: 16px !important;
+    }
+
+    /* Typography */
+    .section-title {
+        font-size: 1.75rem !important;
+    }
+
+    .section-subtitle {
+        font-size: 1rem !important;
+    }
+
+    /* Form elements */
+    .form-input,
+    .form-textarea {
+        padding: 0.75rem 1rem !important;
+        font-size: 0.95rem !important;
+    }
+
+    /* Spacing adjustments */
+    .container {
+        padding: 0 1rem !important;
+    }
+
+    /* Demo console */
+    .demo-content {
+        padding: 1.25rem !important;
+    }
+
+    /* Footer */
+    .footer {
+        padding: 3rem 1rem 2rem !important;
+    }
+
+    .footer-bottom {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Extra small screens */
+    .logo-text {
+        display: none;
+    }
+
+    .chat-main {
+        padding: 0.5rem !important;
+    }
+
+    .stat-number {
+        font-size: 2rem !important;
+    }
+
+    .about-stats {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Touch-friendly buttons */
+    button {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* Better touch targets */
+    .history-item {
+        padding: 1rem !important;
+    }
+
+    .discussion-action {
+        padding: 0.5rem 0 !important;
+        min-height: 40px;
+    }
+}
+
+/* ========================================
+   Safe area for notch devices
+   ======================================== */
+@supports (padding-top: env(safe-area-inset-top)) {
+    .navbar {
+        padding-top: calc(1rem + env(safe-area-inset-top));
+    }
+
+    .chat-layout {
+        padding-top: calc(60px + env(safe-area-inset-top));
+    }
+
+    .chat-sidebar {
+        padding-top: env(safe-area-inset-top);
+    }
+
+    .mobile-nav {
+        padding-top: calc(5rem + env(safe-area-inset-top));
+    }
+}
+
+/* ========================================
+   Better scrolling on mobile
+   ======================================== */
+@media (max-width: 768px) {
+    html {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .custom-scrollbar {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Hide scrollbars but keep functionality on mobile */
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    /* Prevent zoom on input focus */
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    textarea {
+        font-size: 16px !important;
+    }
+}
+
+/* ========================================
+   Accessibility improvements for mobile
+   ======================================== */
+@media (max-width: 768px) {
+    /* Larger tap targets */
+    a,
+    button {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* Better focus states */
+    button:focus-visible,
+    a:focus-visible {
+        outline-offset: 4px;
+    }
+}

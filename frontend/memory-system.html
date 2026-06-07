@@ -248,10 +248,13 @@
                                 </div>
                             </div>
                             <div class="pt-4 border-t border-white/10">
-                                <h4 class="text-sm font-semibold text-slate-300 mb-3 flex items-center">
-                                    <i data-lucide="code" class="w-4 h-4 mr-2"></i>提示词工程预览
-                                </h4>
-                                <div class="bg-black/30 p-3 rounded-lg border border-white/10">
+                                <button onclick="togglePromptPreview()" class="w-full flex items-center justify-between text-left">
+                                    <h4 class="text-sm font-semibold text-slate-300 flex items-center">
+                                        <i data-lucide="code" class="w-4 h-4 mr-2"></i>提示词预览
+                                    </h4>
+                                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 transition-transform" id="prompt-arrow"></i>
+                                </button>
+                                <div class="bg-black/30 p-3 rounded-lg border border-white/10 mt-3" id="prompt-preview-container">
                                     <pre class="text-xs text-slate-400 whitespace-pre-wrap" id="prompt-preview">
 加载中...
                                     </pre>
@@ -759,6 +762,20 @@ ${styles[teachingStyle]}
             document.body.appendChild(toast);
             
             setTimeout(() => toast.remove(), 3000);
+        }
+
+        // 切换提示词预览显示/隐藏
+        function togglePromptPreview() {
+            const container = document.getElementById('prompt-preview-container');
+            const arrow = document.getElementById('prompt-arrow');
+            
+            container.classList.toggle('hidden');
+            
+            if (container.classList.contains('hidden')) {
+                arrow.style.transform = 'rotate(-90deg)';
+            } else {
+                arrow.style.transform = 'rotate(0deg)';
+            }
         }
 
         // 初始化

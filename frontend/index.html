@@ -40,8 +40,35 @@
                     开始使用
                 </a>
             </div>
+
+            <!-- Mobile menu toggle -->
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" aria-label="菜单">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
         </div>
     </nav>
+
+    <!-- Mobile navigation overlay -->
+    <div class="mobile-nav-overlay" id="mobileNavOverlay">
+        <div class="mobile-nav">
+            <button class="mobile-nav-close" onclick="toggleMobileMenu()" aria-label="关闭">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+            <ul class="mobile-nav-links">
+                <li><a href="index.html" class="active" onclick="toggleMobileMenu()">首页</a></li>
+                <li><a href="chat.html" onclick="toggleMobileMenu()">智能对话</a></li>
+                <li><a href="question-bank.html" onclick="toggleMobileMenu()">个人题库</a></li>
+                <li><a href="study-plans.html" onclick="toggleMobileMenu()">学习规划</a></li>
+                <li><a href="memory-system.html" onclick="toggleMobileMenu()">AI记忆</a></li>
+            </ul>
+            <div class="mobile-nav-actions">
+                <a href="chat.html" class="btn btn-primary" onclick="toggleMobileMenu()">
+                    <i data-lucide="sparkles" class="w-4 h-4" aria-hidden="true"></i>
+                    开始使用
+                </a>
+            </div>
+        </div>
+    </div>
 
     <main class="relative z-10">
         <section class="hero">
@@ -212,21 +239,18 @@
                     </p>
                 </div>
 
-                <div class="glass-card discussion-form">
-                    <form id="discussion-form">
-                        <div class="form-group">
-                            <label for="topic" class="form-label">讨论主题</label>
-                            <input type="text" id="topic" class="form-input" placeholder="分享你的学习心得或提问..." required autocomplete="off">
-                        </div>
-                        <div class="form-group">
-                            <label for="content" class="form-label">详细内容</label>
-                            <textarea id="content" class="form-textarea" placeholder="详细描述你的问题或想法..." required></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-full">
-                            <i data-lucide="send" class="w-4 h-4" aria-hidden="true"></i>
-                            发布讨论
-                        </button>
-                    </form>
+                <div class="glass-card p-6">
+                    <h3 class="text-lg font-semibold text-white mb-3 flex items-center">
+                        <i data-lucide="message-square" class="w-5 h-5 mr-2 text-purple-400"></i>
+                        加入讨论区
+                    </h3>
+                    <p class="text-slate-400 text-sm mb-4">
+                        与其他学习者交流心得，分享学习技巧，共同进步
+                    </p>
+                    <a href="discuss.html" class="btn btn-primary w-full">
+                        <i data-lucide="arrow-right" class="w-4 h-4" aria-hidden="true"></i>
+                        进入讨论区
+                    </a>
                 </div>
 
                 <div class="discussion-list" id="discussion-list">
@@ -372,35 +396,6 @@
             }
         });
 
-        document.getElementById('discussion-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const author = document.getElementById('discussion-author').value;
-            const topic = document.getElementById('discussion-topic').value;
-            const content = document.getElementById('discussion-content').value;
-            
-            if (!author || !topic || !content) {
-                alert('请填写完整信息');
-                return;
-            }
-            
-            const comments = JSON.parse(localStorage.getItem('mechanicalai-comments') || '[]');
-            const newComment = {
-                id: Date.now().toString(),
-                author: author,
-                topic: topic,
-                content: content,
-                category: 'general',
-                timestamp: new Date().toISOString(),
-                likes: 0,
-                replies: []
-            };
-            comments.unshift(newComment);
-            localStorage.setItem('mechanicalai-comments', JSON.stringify(comments));
-            
-            document.getElementById('discussion-form').reset();
-            alert('讨论发布成功！');
-        });
-
         const observerOptions = {
             threshold: 0.1,
             rootMargin: '0px 0px -50px 0px'
@@ -420,6 +415,25 @@
             el.style.transform = 'translateY(30px)';
             el.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
             observer.observe(el);
+        });
+
+        // Mobile Navigation Functions
+        function toggleMobileMenu() {
+            const overlay = document.getElementById('mobileNavOverlay');
+            overlay.classList.toggle('active');
+            
+            // Prevent body scroll when menu is open
+            document.body.style.overflow = overlay.classList.contains('active') ? 'hidden' : '';
+        }
+
+        // Close mobile menu when resizing to desktop
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 768) {
+                const mobileOverlay = document.getElementById('mobileNavOverlay');
+                if (mobileOverlay.classList.contains('active')) {
+                    toggleMobileMenu();
+                }
+            }
         });
     </script>
 </body>
