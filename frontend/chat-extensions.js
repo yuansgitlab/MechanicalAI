@@ -112,7 +112,6 @@ async function saveStudyPlan(planTitle, planContent) {
 function parseStudyPlan(content) {
     const phases = [];
     
-    // 尝试识别Markdown表格格式
     const tableRegex = /[|].*?[|]/g;
     const tables = content.match(tableRegex) || [];
     
@@ -123,38 +122,43 @@ function parseStudyPlan(content) {
         if (rows.length < 2) return;
         
         rows.forEach((row, rowIdx) => {
-            if (rowIdx === 0) return; // 跳过表头
+            if (rowIdx === 0) return;
             
-            const cells = row.split('|').filter(cell => cell.trim()).map(cell => cell.trim());
-            if (cells.length >= 2) {
-                const phaseName = cells[0] || `阶段 ${phases.length + 1}`;
-                const taskText = cells[1] || '';
-                
-                if (!currentPhase || currentPhase.name !== phaseName) {
-                    if (currentPhase) phases.push(currentPhase);
-                    currentPhase = {
-                        id: `phase-${phases.length}`,
-                        name: phaseName,
-                        tasks: []
-                    };
+            const trimmedRow = row.trim();
+            if (trimmedRow.match(/^\|[-\s]+\|$/)) return;
+            
+            if (trimmedRow.startsWith('|') && trimmedRow.endsWith('|')) {
+                const parts = trimmedRow.slice(1, -1).split('|');
+                const cells = parts.map(cell => cell.trim()).filter(cell => cell.length > 0);
+                if (cells.length >= 2 && !cells[0].match(/^[-]+$/)) {
+                    const phaseName = cells[0] || `阶段 ${phases.length + 1}`;
+                    const taskText = cells[1] || '';
+                    
+                    if (!currentPhase || currentPhase.name !== phaseName) {
+                        if (currentPhase) phases.push(currentPhase);
+                        currentPhase = {
+                            id: `phase-${phases.length}`,
+                            name: phaseName,
+                            tasks: []
+                        };
+                    }
+                    
+                    currentPhase.tasks.push({
+                        id: `task-${phases.length}-${currentPhase.tasks.length}`,
+                        text: taskText,
+                        completed: false,
+                        completedAt: null,
+                        notes: '',
+                        duration: cells[3] || cells[2] || '',
+                        priority: 'medium'
+                    });
                 }
-                
-                currentPhase.tasks.push({
-                    id: `task-${phases.length}-${currentPhase.tasks.length}`,
-                    text: taskText,
-                    completed: false,
-                    completedAt: null,
-                    notes: '',
-                    duration: cells[2] || '',
-                    priority: 'medium'
-                });
             }
         });
     });
     
     if (currentPhase) phases.push(currentPhase);
     
-    // 如果没有解析出内容，创建默认结构
     if (phases.length === 0) {
         phases.push({
             id: 'phase-0',

@@ -252,9 +252,9 @@
                                     <h4 class="text-sm font-semibold text-slate-300 flex items-center">
                                         <i data-lucide="code" class="w-4 h-4 mr-2"></i>提示词预览
                                     </h4>
-                                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 transition-transform" id="prompt-arrow"></i>
+                                    <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400 transition-transform" id="prompt-arrow"></i>
                                 </button>
-                                <div class="bg-black/30 p-3 rounded-lg border border-white/10 mt-3" id="prompt-preview-container">
+                                <div class="bg-black/30 p-3 rounded-lg border border-white/10 mt-3 hidden" id="prompt-preview-container">
                                     <pre class="text-xs text-slate-400 whitespace-pre-wrap" id="prompt-preview">
 加载中...
                                     </pre>
@@ -616,11 +616,18 @@
             `;
             
             if (topicsList.length > 0) {
-                topics.innerHTML = topicsList.map(topic => `
-                    <span class="px-3 py-1 rounded-full bg-purple-600/20 text-purple-300 border border-purple-500/30">
-                        ${topic}
-                    </span>
-                `).join('');
+                const colors = ['text-purple-400', 'text-blue-400', 'text-green-400', 'text-yellow-400', 'text-pink-400', 'text-orange-400', 'text-cyan-400'];
+                const bgColors = ['bg-purple-600/15', 'bg-blue-600/15', 'bg-green-600/15', 'bg-yellow-600/15', 'bg-pink-600/15', 'bg-orange-600/15', 'bg-cyan-600/15'];
+                topics.innerHTML = `<div class="flex flex-wrap gap-3 justify-center min-h-[120px] items-center">${topicsList.map((topic, index) => {
+                    const colorIndex = index % colors.length;
+                    const size = 0.8 + Math.random() * 0.6;
+                    const rotate = (Math.random() - 0.5) * 10;
+                    return `<span 
+                        class="${bgColors[colorIndex]} ${colors[colorIndex]} px-4 py-2 rounded-full border border-white/10 
+                        cursor-pointer hover:scale-110 transition-transform duration-300 hover:shadow-lg hover:shadow-purple-500/20"
+                        style="font-size: ${size}rem; transform: rotate(${rotate}deg);"
+                    >${topic}</span>`;
+                }).join('')}</div>`;
             } else {
                 topics.innerHTML = `<p class="text-slate-400">还没有探索的主题</p>`;
             }
@@ -772,9 +779,9 @@ ${styles[teachingStyle]}
             container.classList.toggle('hidden');
             
             if (container.classList.contains('hidden')) {
-                arrow.style.transform = 'rotate(-90deg)';
-            } else {
                 arrow.style.transform = 'rotate(0deg)';
+            } else {
+                arrow.style.transform = 'rotate(90deg)';
             }
         }
 
