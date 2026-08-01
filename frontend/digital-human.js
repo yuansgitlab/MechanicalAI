@@ -8,39 +8,22 @@
     // ======================== 配置 ========================
     const CONFIG = {
         // Live2D 模型（Cubism 2 格式，可爱风格）
+        // 使用 guansss/pixi-live2d-display 仓库中的测试模型（已验证 CDN 可访问）
         models: [
-            {
-                name: 'Hijiki',
-                label: '小黑猫',
-                // 多源备用：jsDelivr → fastly
-                paths: [
-                    'https://cdn.jsdelivr.net/gh/fghrsh/live2d_api/model/Hijiki/Hijiki.model.json',
-                    'https://fastly.jsdelivr.net/gh/fghrsh/live2d_api/model/Hijiki/Hijiki.model.json',
-                ]
-            },
-            {
-                name: 'Pio',
-                label: '小白猫',
-                paths: [
-                    'https://cdn.jsdelivr.net/gh/fghrsh/live2d_api/model/Pio/model.json',
-                    'https://fastly.jsdelivr.net/gh/fghrsh/live2d_api/model/Pio/model.json',
-                ]
-            },
             {
                 name: 'Shizuku',
                 label: '萌少女',
                 paths: [
-                    'https://cdn.jsdelivr.net/gh/fghrsh/live2d_api/model/Shizuku/Shizuku.model.json',
-                    'https://fastly.jsdelivr.net/gh/fghrsh/live2d_api/model/Shizuku/Shizuku.model.json',
+                    'https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display/test/assets/shizuku/shizuku.model.json',
                 ]
             },
         ],
         currentModelIndex: 0,
 
-        // 依赖 CDN
+        // 依赖 CDN（均已验证可访问）
         deps: {
             pixi: 'https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js',
-            cubism2Core: 'https://cdn.jsdelivr.net/gh/stevenjoezhang/live2d-widget/lib/live2d.min.js',
+            cubism2Core: 'https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js',
             pixiLive2D: 'https://cdn.jsdelivr.net/npm/pixi-live2d-display/dist/cubism2.min.js',
         },
 
@@ -531,9 +514,9 @@
                     <span class="dh-item-label">测试语音</span>
                 </button>
                 <button class="dh-panel-item" id="dh-switch-model">
-                    <span class="dh-item-icon">🐱</span>
-                    <span class="dh-item-label">切换形象</span>
-                    <span class="dh-item-status" id="dh-model-status">小黑猫</span>
+                    <span class="dh-item-icon">�</span>
+                    <span class="dh-item-label">打招呼</span>
+                    <span class="dh-item-status" id="dh-model-status">萌少女</span>
                 </button>
                 <button class="dh-panel-item" id="dh-stop-voice">
                     <span class="dh-item-icon">⏹</span>
@@ -639,9 +622,11 @@
             speak('你好！我是小智，很高兴认识你！有什么可以帮你的吗？');
         });
 
-        // 切换模型
+        // 打招呼（触发表情+动作）
         document.getElementById('dh-switch-model').addEventListener('click', () => {
-            switchModel();
+            triggerExpression();
+            const greetings = ['嗨！你好呀~', '今天也要加油学习哦！', '有什么想聊的吗？'];
+            showBubble(greetings[Math.floor(Math.random() * greetings.length)], 2500);
         });
 
         // 停止说话
