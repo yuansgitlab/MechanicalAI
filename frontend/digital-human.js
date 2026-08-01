@@ -1,65 +1,79 @@
 /**
- * Digital Human Module - Live2D + 游走 + TTS语音 + 表情 + 唇形同步
- * 使用 pixi-live2d-display 实现完整编程控制
+ * Digital Human Module
+ * TTS 双引擎: Web Speech API + QwenTTS（自定义音色/克隆）
+ * 加载优化: 首屏emoji占位 + preconnect + 进度气泡 + 平滑淡入
+ * 聊天集成: clone节点去控件 + 文本稳定debounce + characterData观察
  */
 (function () {
     'use strict';
 
-    // ======================== 配置 ========================
+    // ========== 配置 ==========
     const CONFIG = {
-        // Live2D 模型（Cubism 2 格式，可爱风格）
-        // 使用 guansss/pixi-live2d-display 仓库中的测试模型（已验证 CDN 可访问）
-        models: [
-            {
-                name: 'Shizuku',
-                label: '萌少女',
-                paths: [
-                    'https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display/test/assets/shizuku/shizuku.model.json',
-                ]
-            },
-        ],
+        models: [{
+            name: 'Shizuku',
+            label: '萌少女',
+            paths: [
+                'https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display/test/assets/shizuku/shizuku.model.json',
+            ],
+        }],
         currentModelIndex: 0,
 
-        // 依赖 CDN（均已验证可访问）
         deps: {
             pixi: 'https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js',
             cubism2Core: 'https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js',
             pixiLive2D: 'https://cdn.jsdelivr.net/npm/pixi-live2d-display/dist/cubism2.min.js',
         },
 
-        // 显示
         width: 200,
         height: 280,
         mobileScale: 0.65,
 
-        // 游走
         walkSpeed: 35,
         idleDuration: 6000,
         margin: 10,
 
-        // TTS
         ttsLang: 'zh-CN',
         ttsRate: 1.0,
         ttsPitch: 1.3,
         ttsEnabled: true,
 
-        // 提示语
+        qwenTts: {
+            configUrl: 'assets/tts-config.json',
+            fallbackUrl: 'http://127.0.0.1:8766',
+            defaultSpeaker: '默认女声',
+            enabled: false,
+            serverUrl: null,
+            speaker: null,
+            lastAbort: null,
+        },
+
         tips: [
             '有问题随时问我哦~',
             '点击导航栏开始对话！',
-            '我懂很多机械工程的知识呢',
             '需要制定学习规划吗？',
             '试试问我"解释PID控制器原理"',
             '可以把好题收藏到题库哦',
             '探索知识，从提问开始~',
         ],
+
+        ttsBlacklist: [
+            /AI正在思考/,
+            /AI思考中/,
+            /思考中/,
+            /正在加载/,
+            /加载中/,
+            /^.*loading\.\.\..*$/i,
+            /正在生成/,
+            /连接中/,
+        ],
     };
 
-    // ======================== 状态 ========================
+    // ========== 状态 ==========
     let state = 'loading';
     let pixiApp = null;
     let live2dModel = null;
     let canvasEl = null;
+    let fallbackEl = null;
     let position = { x: 10, y: 0 };
     let targetPos = null;
     let lastActionTime = Date.now();
@@ -68,77 +82,125 @@
     let mouthTimer = null;
     let tipTimer = null;
     let panelEl = null;
-    let audioAnalyser = null;
-    let audioContext = null;
 
-    // ======================== 工具函数 ========================
+    const textStableTimers = new Map();
+    const spokenSignatures = new Set();
+
+    // ========== CDN 预连接 ==========
+    (function preconnectCDNs() {
+        const hosts = ['https://cdn.jsdelivr.net'];
+        hosts.forEach(function (h) {
+            if (!document.querySelector('link[rel="preconnect"][href="' + h + '"]')) {
+                const l = document.createElement('link');
+                l.rel = 'preconnect';
+                l.href = h;
+                l.crossOrigin = 'anonymous';
+                document.head.appendChild(l);
+            }
+        });
+        const pf = document.createElement('link');
+        pf.rel = 'dns-prefetch';
+        pf.href = '//cdn.jsdelivr.net';
+        document.head.appendChild(pf);
+    })();
+
+    // ========== 工具 ==========
     function loadScript(url) {
-        return new Promise((resolve, reject) => {
+        return new Promise(function (resolve, reject) {
             const s = document.createElement('script');
             s.src = url;
+            s.async = true;
             s.onload = resolve;
-            s.onerror = () => reject(new Error('加载失败: ' + url));
+            s.onerror = function () { reject(new Error('加载失败: ' + url)); };
             document.head.appendChild(s);
         });
     }
 
     async function loadModelFromSources(paths) {
-        for (const path of paths) {
+        for (let i = 0; i < paths.length; i++) {
             try {
-                const model = await PIXI.live2d.Live2DModel.from(path);
-                return model;
+                const m = await PIXI.live2d.Live2DModel.from(paths[i]);
+                return m;
             } catch (e) {
-                console.warn('[DigitalHuman] 模型源失败:', path, e.message);
+                console.warn('[DigitalHuman] 模型源失败:', paths[i], e && e.message);
             }
         }
         throw new Error('所有模型源均失败');
     }
 
-    // ======================== 加载依赖 ========================
-    async function loadDependencies() {
-        // 1. PixiJS
-        if (typeof PIXI === 'undefined') {
-            await loadScript(CONFIG.deps.pixi);
-        }
-        // 2. Cubism 2 Core
-        if (typeof Live2D === 'undefined') {
-            await loadScript(CONFIG.deps.cubism2Core);
-        }
-        // 3. pixi-live2d-display
-        if (typeof PIXI.live2d === 'undefined') {
-            await loadScript(CONFIG.deps.pixiLive2D);
+    function textSignature(text) {
+        if (!text) return 'x';
+        return text.length + '|' + text.slice(0, 20) + '|' + text.slice(-20);
+    }
+
+    // ========== 首屏：emoji 占位 ==========
+    function showEmojiPlaceholder() {
+        fallbackEl = document.createElement('div');
+        fallbackEl.id = 'dh-fallback';
+        const sc = isMobile ? CONFIG.mobileScale : 1;
+        fallbackEl.style.cssText =
+            'position:fixed;' +
+            'width:' + Math.round(64 * sc) + 'px;' +
+            'height:' + Math.round(64 * sc) + 'px;' +
+            'font-size:' + Math.round(52 * sc) + 'px;' +
+            'display:flex;align-items:center;justify-content:center;' +
+            'z-index:9998;cursor:pointer;user-select:none;' +
+            'transition:transform .2s,opacity .3s;';
+        fallbackEl.textContent = '🐱';
+        document.body.appendChild(fallbackEl);
+
+        position.x = CONFIG.margin;
+        position.y = window.innerHeight - Math.round(64 * sc) - CONFIG.margin - 20;
+        fallbackEl.style.left = position.x + 'px';
+        fallbackEl.style.top = position.y + 'px';
+
+        fallbackEl.addEventListener('click', onCharacterClick);
+
+        setTimeout(function () {
+            showBubbleOnEl(fallbackEl, '角色加载中...稍等一下下~', 4500);
+        }, 200);
+    }
+
+    function swapFallbackToLive2D() {
+        if (fallbackEl) {
+            fallbackEl.style.opacity = '0';
+            setTimeout(function () { if (fallbackEl) { fallbackEl.remove(); fallbackEl = null; } }, 300);
         }
     }
 
-    // ======================== 初始化 Live2D ========================
+    // ========== 依赖加载 ==========
+    async function loadDependencies() {
+        const t0 = performance.now();
+        if (typeof PIXI === 'undefined') await loadScript(CONFIG.deps.pixi);
+        if (typeof Live2D === 'undefined') await loadScript(CONFIG.deps.cubism2Core);
+        if (typeof PIXI === 'undefined' || typeof PIXI.live2d === 'undefined') await loadScript(CONFIG.deps.pixiLive2D);
+        console.log('[DigitalHuman] 依赖加载完成，耗时', Math.round(performance.now() - t0), 'ms');
+    }
+
+    // ========== Live2D 初始化 ==========
     async function initLive2D() {
         try {
+            const t0 = performance.now();
             await loadDependencies();
-            console.log('[DigitalHuman] 依赖加载完成');
+            showBubbleOnEl(fallbackEl || canvasEl, '形象加载中... 90%', 2500);
 
-            const scale = isMobile ? CONFIG.mobileScale : 1;
-            const w = CONFIG.width * scale;
-            const h = CONFIG.height * scale;
+            const sc = isMobile ? CONFIG.mobileScale : 1;
+            const w = CONFIG.width * sc;
+            const h = CONFIG.height * sc;
 
-            // 创建 Canvas 容器
             canvasEl = document.createElement('canvas');
             canvasEl.id = 'dh-canvas';
-            canvasEl.width = w * 2;  // 高清
+            canvasEl.width = w * 2;
             canvasEl.height = h * 2;
-            canvasEl.style.cssText = `
-                position: fixed;
-                left: ${position.x}px;
-                top: ${position.y}px;
-                width: ${w}px;
-                height: ${h}px;
-                z-index: 9998;
-                pointer-events: auto;
-                cursor: pointer;
-                transition: filter 0.2s;
-            `;
+            canvasEl.style.cssText =
+                'position:fixed;' +
+                'left:' + position.x + 'px;' +
+                'top:' + (window.innerHeight - h - CONFIG.margin) + 'px;' +
+                'width:' + w + 'px;height:' + h + 'px;' +
+                'z-index:9998;pointer-events:auto;cursor:pointer;' +
+                'opacity:0;transition:opacity .5s ease;';
             document.body.appendChild(canvasEl);
 
-            // 创建 PixiJS 应用
             pixiApp = new PIXI.Application({
                 view: canvasEl,
                 transparent: true,
@@ -147,655 +209,743 @@
                 autoStart: true,
             });
 
-            // 加载模型
-            const modelConfig = CONFIG.models[CONFIG.currentModelIndex];
-            console.log('[DigitalHuman] 正在加载模型:', modelConfig.label);
-            live2dModel = await loadModelFromSources(modelConfig.paths);
-
-            // 调整模型大小和位置
-            const modelScale = (h * 2 * 0.9) / live2dModel.internalModel.height;
-            live2dModel.scale.set(modelScale);
-            live2dModel.anchor.set(0.5, 0.9);
-            live2dModel.x = w;  // canvas 中心
-            live2dModel.y = h * 2;
-
-            pixiApp.stage.addChild(live2dModel);
-
-            // 点击交互
-            live2dModel.on('hit', (hitAreas) => {
-                onCharacterClick();
-            });
-
-            canvasEl.addEventListener('click', onCharacterClick);
-            canvasEl.addEventListener('touchstart', onCharacterClick, { passive: true });
-
-            // 初始位置
             position.x = CONFIG.margin;
             position.y = window.innerHeight - h - CONFIG.margin;
             updatePosition();
 
+            const mc = CONFIG.models[CONFIG.currentModelIndex];
+            console.log('[DigitalHuman] 正在加载模型:', mc.label);
+            live2dModel = await loadModelFromSources(mc.paths);
+
+            const ms = (h * 2 * 0.9) / live2dModel.internalModel.height;
+            live2dModel.scale.set(ms);
+            live2dModel.anchor.set(0.5, 0.9);
+            live2dModel.x = w;
+            live2dModel.y = h * 2;
+            pixiApp.stage.addChild(live2dModel);
+
+            live2dModel.on('hit', function () { onCharacterClick(); });
+            canvasEl.addEventListener('click', onCharacterClick);
+            canvasEl.addEventListener('touchstart', onCharacterClick, { passive: true });
+
+            requestAnimationFrame(function () {
+                if (canvasEl) canvasEl.style.opacity = '1';
+                swapFallbackToLive2D();
+            });
+
             state = 'idle';
             lastActionTime = Date.now();
-
             startBehaviorLoop();
             startTipLoop();
 
-            // 欢迎动画
-            setTimeout(() => {
+            setTimeout(function () {
                 showBubble('你好！我是小智，你的AI学习伙伴~', 4000);
                 triggerExpression();
-            }, 800);
+            }, 600);
 
-            console.log('[DigitalHuman] 数字人已就绪:', modelConfig.label);
-
+            console.log('[DigitalHuman] 数字人已就绪，总耗时', Math.round(performance.now() - t0), 'ms');
         } catch (e) {
             console.error('[DigitalHuman] Live2D 初始化失败:', e);
-            initFallback();
+            if (fallbackEl) showBubbleOnEl(fallbackEl, 'Live2D加载失败啦，emoji模式也能陪你~', 4000);
+            initFallbackBehavior();
         }
     }
 
-    // ======================== 位置更新 ========================
     function updatePosition() {
-        if (!canvasEl) return;
-        canvasEl.style.left = position.x + 'px';
-        canvasEl.style.top = position.y + 'px';
+        const el = canvasEl || fallbackEl;
+        if (!el) return;
+        el.style.left = position.x + 'px';
+        el.style.top = position.y + 'px';
     }
 
-    // ======================== 行为循环 ========================
+    // ========== 行为循环 ==========
     function startBehaviorLoop() {
-        function loop() {
+        (function loop() {
             const now = Date.now();
-
             if (state === 'idle') {
-                if (now - lastActionTime > CONFIG.idleDuration) {
-                    startWalking();
-                }
-                // 待机微动：头部轻微摇摆
+                if (now - lastActionTime > CONFIG.idleDuration) startWalking();
                 if (live2dModel && Math.random() < 0.01) {
                     try {
-                        live2dModel.internalModel.coreModel.setParameterValueById('PARAM_BODY_ANGLE_X', (Math.random() - 0.5) * 5);
-                        live2dModel.internalModel.coreModel.setParameterValueById('PARAM_BODY_ANGLE_Y', (Math.random() - 0.5) * 3);
-                    } catch (e) { /* 静默 */ }
+                        const cm = live2dModel.internalModel.coreModel;
+                        cm.setParameterValueById('PARAM_BODY_ANGLE_X', (Math.random() - 0.5) * 5);
+                        cm.setParameterValueById('PARAM_BODY_ANGLE_Y', (Math.random() - 0.5) * 3);
+                    } catch (e) { /* */ }
                 }
             } else if (state === 'walking' && targetPos) {
                 const dx = targetPos.x - position.x;
                 const dy = targetPos.y - position.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-
                 if (dist < 5) {
                     state = 'idle';
                     lastActionTime = now;
                     targetPos = null;
                     if (canvasEl) canvasEl.style.transform = 'scaleX(1)';
                 } else {
-                    const speed = CONFIG.walkSpeed / 60;
-                    position.x += (dx / dist) * speed;
-                    position.y += (dy / dist) * speed;
-
-                    // 朝向翻转
-                    if (canvasEl) {
-                        canvasEl.style.transform = dx < 0 ? 'scaleX(-1)' : 'scaleX(1)';
-                    }
+                    const sp = CONFIG.walkSpeed / 60;
+                    position.x += (dx / dist) * sp;
+                    position.y += (dy / dist) * sp;
+                    const el = canvasEl || fallbackEl;
+                    if (el) el.style.transform = dx < 0 ? 'scaleX(-1)' : 'scaleX(1)';
                     updatePosition();
-
-                    // 行走时身体晃动
                     if (live2dModel) {
                         try {
                             const sway = Math.sin(now / 150) * 8;
-                            live2dModel.internalModel.coreModel.setParameterValueById('PARAM_BODY_ANGLE_X', sway);
-                            live2dModel.internalModel.coreModel.setParameterValueById('PARAM_BREATH', 1);
-                        } catch (e) { /* 静默 */ }
+                            const cm = live2dModel.internalModel.coreModel;
+                            cm.setParameterValueById('PARAM_BODY_ANGLE_X', sway);
+                            cm.setParameterValueById('PARAM_BREATH', 1);
+                        } catch (e) { /* */ }
                     }
                 }
             }
-
             requestAnimationFrame(loop);
-        }
-        loop();
+        })();
     }
 
     function startWalking() {
         state = 'walking';
-        const scale = isMobile ? CONFIG.mobileScale : 1;
-        const charW = CONFIG.width * scale;
-        const charH = CONFIG.height * scale;
-
-        // 沿屏幕边缘游走
+        const sc = isMobile ? CONFIG.mobileScale : 1;
+        const cw = CONFIG.width * sc;
+        const ch = CONFIG.height * sc;
         const edge = Math.floor(Math.random() * 4);
         let tx, ty;
-
         if (edge === 0 || edge === 3) {
-            tx = CONFIG.margin + Math.random() * (window.innerWidth - charW - CONFIG.margin * 2);
-            ty = window.innerHeight - charH - CONFIG.margin;
+            tx = CONFIG.margin + Math.random() * Math.max(0, window.innerWidth - cw - CONFIG.margin * 2);
+            ty = window.innerHeight - ch - CONFIG.margin;
         } else if (edge === 1) {
             tx = CONFIG.margin;
-            ty = window.innerHeight * 0.3 + Math.random() * (window.innerHeight * 0.4 - charH);
+            ty = window.innerHeight * 0.3 + Math.random() * Math.max(0, window.innerHeight * 0.4 - ch);
         } else {
-            tx = window.innerWidth - charW - CONFIG.margin;
-            ty = window.innerHeight * 0.3 + Math.random() * (window.innerHeight * 0.4 - charH);
+            tx = window.innerWidth - cw - CONFIG.margin;
+            ty = window.innerHeight * 0.3 + Math.random() * Math.max(0, window.innerHeight * 0.4 - ch);
         }
-
         targetPos = { x: tx, y: ty };
     }
 
-    // ======================== 提示循环 ========================
+    function initFallbackBehavior() {
+        state = 'idle';
+        lastActionTime = Date.now();
+        startBehaviorLoop();
+        startTipLoop();
+    }
+
+    // ========== 提示循环 ==========
     function startTipLoop() {
-        function showNextTip() {
+        (function showNextTip() {
             if (state === 'idle' || state === 'walking') {
                 const tip = CONFIG.tips[Math.floor(Math.random() * CONFIG.tips.length)];
                 showBubble(tip, 3500);
             }
-            tipTimer = setTimeout(showNextTip, 20000 + Math.random() * 20000);
-        }
-        tipTimer = setTimeout(showNextTip, 15000);
+            tipTimer = setTimeout(showNextTip, 25000 + Math.random() * 25000);
+        })();
     }
 
-    // ======================== 点击交互 ========================
+    // ========== 点击交互 ==========
     function onCharacterClick(e) {
         if (e) e.stopPropagation();
-        if (state === 'talking') {
-            stopSpeaking();
-            return;
-        }
-
+        if (state === 'talking') { stopSpeaking(); return; }
         state = 'idle';
         targetPos = null;
         lastActionTime = Date.now();
-
         triggerExpression();
-
-        const greetings = [
+        const g = [
             '嗨！想聊点什么？',
             '有什么我可以帮你的吗？',
             '点上方导航开始对话吧~',
             '我可是懂很多机械知识的小助手哦！',
             '需要制定学习规划吗？',
         ];
-        showBubble(greetings[Math.floor(Math.random() * greetings.length)], 3000);
+        showBubble(g[Math.floor(Math.random() * g.length)], 3000);
     }
 
-    // ======================== 表情/动作 ========================
-    function triggerExpression(name) {
-        if (!live2dModel) return;
-        try {
-            // 尝试触发随机表情
-            if (live2dModel.expression) {
-                const expressions = live2dModel.internalModel.settings.expressions;
-                if (expressions && expressions.length > 0) {
-                    const idx = Math.floor(Math.random() * expressions.length);
-                    live2dModel.expression(idx);
-                }
+    // ========== 表情 ==========
+    function triggerExpression() {
+        if (!live2dModel) {
+            const el = fallbackEl;
+            if (el) {
+                el.style.transition = 'transform .2s';
+                el.style.transform = (el.style.transform || 'scaleX(1)').replace(/scaleX\([^)]*\)/, '') + ' translateY(-12px)';
+                setTimeout(function () {
+                    if (el) el.style.transform = el.style.transform.replace(' translateY(-12px)', '');
+                }, 200);
             }
-
-            // 触发随机动作
-            if (live2dModel.motion) {
-                live2dModel.motion('tap_body');
-            }
-        } catch (e) {
-            // 静默
+            return;
         }
-
-        // CSS 弹跳
-        if (canvasEl) {
-            const currentTransform = canvasEl.style.transform.replace(/ translateY\(-\d+px\)/, '');
-            canvasEl.style.transform = currentTransform + ' translateY(-10px)';
-            setTimeout(() => {
-                if (canvasEl) {
-                    canvasEl.style.transform = canvasEl.style.transform.replace(' translateY(-10px)', '');
+        try {
+            if (live2dModel.expression) {
+                const exprs = live2dModel.internalModel.settings.expressions;
+                if (exprs && exprs.length > 0) {
+                    live2dModel.expression(Math.floor(Math.random() * exprs.length));
                 }
+            }
+            if (live2dModel.motion) live2dModel.motion('tap_body');
+        } catch (e) { /* */ }
+
+        if (canvasEl) {
+            const ct = canvasEl.style.transform.replace(/ translateY\(-\d+px\)/, '');
+            canvasEl.style.transform = ct + ' translateY(-10px)';
+            setTimeout(function () {
+                if (canvasEl) canvasEl.style.transform = canvasEl.style.transform.replace(' translateY(-10px)', '');
             }, 200);
         }
     }
 
-    // ======================== TTS 语音合成 ========================
-    function loadVoices() {
-        if (!window.speechSynthesis) return;
-        const voices = speechSynthesis.getVoices();
-        if (voices.length > 0) {
-            voicesReady = true;
-        }
+    // ========== 文本清洗 ==========
+    function cleanAIMessageText(t) {
+        if (!t) return '';
+        t = t.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, ' ');
+        t = t.replace(/```[\s\S]*?```/g, '（代码示例省略）')
+            .replace(/`[^`]*`/g, '')
+            .replace(/\|[-\s|]+\|(\n?)+/g, '')
+            .replace(/[#*_~>\[\]]/g, '')
+            .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+            .replace(/\[[^\]]*\]\([^)]*\)/g, '')
+            .replace(/\n{2,}/g, '。')
+            .replace(/\n/g, ' ')
+            .replace(/[ \t]+/g, ' ')
+            .trim();
+        return t;
     }
 
+    function isBlacklisted(text) {
+        if (!text) return true;
+        if (text.length < 2) return true;
+        for (let i = 0; i < CONFIG.ttsBlacklist.length; i++) {
+            if (CONFIG.ttsBlacklist[i].test(text)) return true;
+        }
+        return false;
+    }
+
+    function extractTextFromBotMsg(el) {
+        if (!el) return '';
+        const clone = el.cloneNode(true);
+        clone.querySelectorAll('.animate-bounce, .animate-pulse, button, [aria-label]').forEach(function (n) { if (n && n.remove) n.remove(); });
+        const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
+        let nd;
+        const toRemove = [];
+        while ((nd = walker.nextNode())) {
+            const txt = nd.textContent || '';
+            if (/思考|加载|连接中|生成中/.test(txt)) toRemove.push(nd.parentNode);
+        }
+        toRemove.forEach(function (n) { if (n && n.remove) n.remove(); });
+        const text = ((clone.innerText || clone.textContent || '')).trim();
+        return cleanAIMessageText(text);
+    }
+
+    // ========== TTS ==========
+    function loadVoices() {
+        if (!window.speechSynthesis) return;
+        const vs = speechSynthesis.getVoices();
+        if (vs.length > 0) voicesReady = true;
+    }
     if (window.speechSynthesis) {
         loadVoices();
         speechSynthesis.addEventListener('voiceschanged', loadVoices);
     }
 
-    function speak(text) {
-        if (!CONFIG.ttsEnabled || !window.speechSynthesis) return;
+    async function loadTtsConfig() {
+        try {
+            const r = await fetch(CONFIG.qwenTts.configUrl + '?_=' + Date.now());
+            if (r.ok) {
+                const c = await r.json();
+                if (c && c.serverUrl) {
+                    CONFIG.qwenTts.serverUrl = c.serverUrl;
+                    CONFIG.qwenTts.speaker = c.speaker || CONFIG.qwenTts.defaultSpeaker;
+                    CONFIG.qwenTts.enabled = true;
+                    console.log('[DigitalHuman] QwenTTS后端已发现:', c.serverUrl, '音色=', CONFIG.qwenTts.speaker);
+                    return true;
+                }
+            }
+        } catch (e) { /* */ }
+        try {
+            const r = await fetch(CONFIG.qwenTts.fallbackUrl + '/health', { cache: 'no-store' });
+            if (r.ok) {
+                CONFIG.qwenTts.serverUrl = CONFIG.qwenTts.fallbackUrl;
+                CONFIG.qwenTts.speaker = CONFIG.qwenTts.defaultSpeaker;
+                CONFIG.qwenTts.enabled = true;
+                console.log('[DigitalHuman] QwenTTS兜底端口可用:', CONFIG.qwenTts.fallbackUrl);
+                return true;
+            }
+        } catch (e) { /* */ }
+        CONFIG.qwenTts.enabled = false;
+        return false;
+    }
 
+    async function speakWithQwenTTS(text) {
+        if (!CONFIG.qwenTts.enabled || !CONFIG.qwenTts.serverUrl) return false;
+        try { if (CONFIG.qwenTts.lastAbort) CONFIG.qwenTts.lastAbort.abort(); } catch (e) { /* */ }
+        const ctrl = new AbortController();
+        CONFIG.qwenTts.lastAbort = ctrl;
+
+        const resp = await fetch(CONFIG.qwenTts.serverUrl + '/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: text,
+                speaker: CONFIG.qwenTts.speaker || CONFIG.qwenTts.defaultSpeaker,
+            }),
+            signal: ctrl.signal,
+        });
+        if (!resp.ok) throw new Error('tts http ' + resp.status);
+        const blob = await resp.blob();
+        if (!blob || blob.size < 100) return false;
+
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+
+        state = 'talking';
+        targetPos = null;
+        if (canvasEl) canvasEl.style.transform = (canvasEl.style.transform || '').replace('scaleX(-1)', 'scaleX(1)');
+        showBubble(text.length > 80 ? text.slice(0, 80) + '...' : text, text.length * 120);
+        startMouthAnimation();
+
+        await new Promise(function (resolve, reject) {
+            audio.onended = resolve;
+            audio.onerror = function () { reject(new Error('audio play error')); };
+            audio.play().catch(reject);
+        }).then(function () {
+            state = 'idle'; lastActionTime = Date.now(); stopMouthAnimation();
+            setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        }).catch(function (err) {
+            state = 'idle'; lastActionTime = Date.now(); stopMouthAnimation();
+            setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+            throw err;
+        });
+        return true;
+    }
+
+    function speakWithWebSpeech(text) {
+        if (!window.speechSynthesis) return false;
         speechSynthesis.cancel();
         stopMouthAnimation();
 
-        // 清理 Markdown
-        const cleanText = text
-            .replace(/```[\s\S]*?```/g, '（代码省略）')
-            .replace(/\|[-\s|]+\|/g, '')
-            .replace(/[#*`_~>\[\]]/g, '')
-            .replace(/!\[.*?\]\(.*?\)/g, '')
-            .replace(/\[.*?\]\(.*?\)/g, '')
-            .replace(/\n{2,}/g, '。')
-            .replace(/\n/g, ' ')
-            .trim();
-
-        if (!cleanText || cleanText.length < 2) return;
-
-        const speakText = cleanText.length > 200
-            ? cleanText.substring(0, 200) + '...'
-            : cleanText;
-
-        const utterance = new SpeechSynthesisUtterance(speakText);
-        utterance.lang = CONFIG.ttsLang;
-        utterance.rate = CONFIG.ttsRate;
-        utterance.pitch = CONFIG.ttsPitch;
-
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = CONFIG.ttsLang;
+        u.rate = CONFIG.ttsRate;
+        u.pitch = CONFIG.ttsPitch;
         if (voicesReady) {
-            const voices = speechSynthesis.getVoices();
-            const zhVoice = voices.find(v => v.lang.startsWith('zh') && v.name.includes('Female')) ||
-                voices.find(v => v.lang.startsWith('zh')) ||
-                voices.find(v => v.lang.startsWith('cmn'));
-            if (zhVoice) utterance.voice = zhVoice;
+            const vs = speechSynthesis.getVoices();
+            const zv = vs.find(function (v) { return v.lang.startsWith('zh') && /(female|女|yunxiaoyi|xiaoyun)/i.test(v.name); })
+                || vs.find(function (v) { return v.lang.startsWith('zh'); })
+                || vs.find(function (v) { return v.lang.startsWith('cmn'); });
+            if (zv) u.voice = zv;
         }
-
-        utterance.onstart = function () {
-            state = 'talking';
-            targetPos = null;
-            if (canvasEl) canvasEl.style.transform = canvasEl.style.transform.replace('scaleX(-1)', 'scaleX(1)');
-            showBubble(speakText.length > 80 ? speakText.substring(0, 80) + '...' : speakText, speakText.length * 120);
+        u.onstart = function () {
+            state = 'talking'; targetPos = null;
+            const el = canvasEl;
+            if (el) el.style.transform = (el.style.transform || '').replace('scaleX(-1)', 'scaleX(1)');
+            showBubble(text.length > 80 ? text.slice(0, 80) + '...' : text, text.length * 120);
             startMouthAnimation();
         };
-
-        utterance.onend = function () {
-            state = 'idle';
-            lastActionTime = Date.now();
-            stopMouthAnimation();
+        u.onend = u.onerror = function () {
+            state = 'idle'; lastActionTime = Date.now(); stopMouthAnimation();
         };
+        speechSynthesis.speak(u);
+        return true;
+    }
 
-        utterance.onerror = function () {
-            state = 'idle';
-            lastActionTime = Date.now();
-            stopMouthAnimation();
-        };
+    async function speak(text) {
+        if (!CONFIG.ttsEnabled) return;
+        stopSpeaking();
+        const clean = cleanAIMessageText(text);
+        if (isBlacklisted(clean)) return;
+        const final = clean.length > 300 ? clean.slice(0, 300) + '\u2026\u2026' : clean;
+        const sig = textSignature(final);
+        if (spokenSignatures.has(sig)) return;
+        spokenSignatures.add(sig);
+        if (spokenSignatures.size > 200) spokenSignatures.clear();
 
-        speechSynthesis.speak(utterance);
+        try {
+            if (CONFIG.qwenTts.enabled) {
+                const ok = await speakWithQwenTTS(final);
+                if (ok) return;
+            }
+        } catch (e) {
+            console.warn('[DigitalHuman] QwenTTS失败，回退WebSpeech:', (e && e.message) || e);
+        }
+        speakWithWebSpeech(final);
     }
 
     function stopSpeaking() {
-        if (window.speechSynthesis) speechSynthesis.cancel();
+        try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) { /* */ }
+        try { if (CONFIG.qwenTts.lastAbort) CONFIG.qwenTts.lastAbort.abort(); } catch (e) { /* */ }
         stopMouthAnimation();
         state = 'idle';
         lastActionTime = Date.now();
     }
 
-    // ======================== 嘴部动画（唇形同步） ========================
+    // ========== 嘴部动画 ==========
     function startMouthAnimation() {
         if (mouthTimer) clearInterval(mouthTimer);
-
-        mouthTimer = setInterval(() => {
+        mouthTimer = setInterval(function () {
             if (!live2dModel) return;
             try {
-                const coreModel = live2dModel.internalModel.coreModel;
-                // 模拟说话嘴部动作（随机开合，模拟音节节奏）
-                const openAmount = Math.random() * 0.7 + 0.2;
-                coreModel.setParameterValueById('PARAM_MOUTH_OPEN_Y', openAmount);
-
-                // 眼睛偶尔眨眼
-                if (Math.random() < 0.1) {
-                    coreModel.setParameterValueById('PARAM_EYE_L_OPEN', 0.1);
-                    coreModel.setParameterValueById('PARAM_EYE_R_OPEN', 0.1);
-                    setTimeout(() => {
+                const cm = live2dModel.internalModel.coreModel;
+                cm.setParameterValueById('PARAM_MOUTH_OPEN_Y', Math.random() * 0.7 + 0.2);
+                if (Math.random() < 0.08) {
+                    cm.setParameterValueById('PARAM_EYE_L_OPEN', 0.1);
+                    cm.setParameterValueById('PARAM_EYE_R_OPEN', 0.1);
+                    setTimeout(function () {
                         try {
-                            coreModel.setParameterValueById('PARAM_EYE_L_OPEN', 1);
-                            coreModel.setParameterValueById('PARAM_EYE_R_OPEN', 1);
-                        } catch (e) { /* 静默 */ }
+                            cm.setParameterValueById('PARAM_EYE_L_OPEN', 1);
+                            cm.setParameterValueById('PARAM_EYE_R_OPEN', 1);
+                        } catch (e) { /* */ }
                     }, 100);
                 }
-            } catch (e) { /* 静默 */ }
+            } catch (e) { /* */ }
         }, 90);
     }
 
     function stopMouthAnimation() {
-        if (mouthTimer) {
-            clearInterval(mouthTimer);
-            mouthTimer = null;
-        }
+        if (mouthTimer) { clearInterval(mouthTimer); mouthTimer = null; }
         if (live2dModel) {
-            try {
-                live2dModel.internalModel.coreModel.setParameterValueById('PARAM_MOUTH_OPEN_Y', 0);
-            } catch (e) { /* 静默 */ }
+            try { live2dModel.internalModel.coreModel.setParameterValueById('PARAM_MOUTH_OPEN_Y', 0); } catch (e) { /* */ }
         }
     }
 
-    // ======================== 对话气泡 ========================
-    function showBubble(text, duration) {
+    // ========== 对话气泡 ==========
+    function showBubbleOnEl(anchorEl, text, duration) {
         const old = document.querySelector('.dh-bubble');
         if (old) old.remove();
-
-        const bubble = document.createElement('div');
-        bubble.className = 'dh-bubble';
-        bubble.textContent = text;
-        document.body.appendChild(bubble);
-
-        requestAnimationFrame(() => {
-            bubble.style.left = (position.x + 10) + 'px';
-            bubble.style.top = (position.y - 50) + 'px';
-            bubble.classList.add('dh-bubble-show');
+        const b = document.createElement('div');
+        b.className = 'dh-bubble';
+        b.textContent = text;
+        document.body.appendChild(b);
+        requestAnimationFrame(function () {
+            let ax = position.x + 10;
+            let ay = position.y - 50;
+            if (anchorEl) {
+                try {
+                    const r = anchorEl.getBoundingClientRect();
+                    ax = r.left + 10;
+                    ay = r.top - 50;
+                } catch (e) { /* */ }
+            }
+            b.style.left = ax + 'px';
+            b.style.top = ay + 'px';
+            b.classList.add('dh-bubble-show');
         });
-
-        const dur = duration || 3000;
-        setTimeout(() => {
-            bubble.classList.remove('dh-bubble-show');
-            setTimeout(() => bubble.remove(), 300);
-        }, dur);
+        const d = duration || 3000;
+        setTimeout(function () {
+            b.classList.remove('dh-bubble-show');
+            setTimeout(function () { b.remove(); }, 300);
+        }, d);
     }
 
-    // ======================== TTS 控制面板 ========================
+    function showBubble(text, duration) {
+        showBubbleOnEl(canvasEl || fallbackEl, text, duration);
+    }
+
+    // ========== 控制面板 ==========
     function createControlPanel() {
         panelEl = document.createElement('div');
         panelEl.id = 'dh-panel';
-        panelEl.innerHTML = `
-            <button id="dh-panel-toggle" class="dh-panel-btn" title="数字人设置">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                    <line x1="12" y1="19" x2="12" y2="23"/>
-                    <line x1="8" y1="23" x2="16" y2="23"/>
-                </svg>
-            </button>
-            <div id="dh-panel-menu" class="dh-panel-menu hidden">
-                <div class="dh-panel-header">数字人设置</div>
-                <button class="dh-panel-item" id="dh-tts-toggle">
-                    <span class="dh-item-icon">🔊</span>
-                    <span class="dh-item-label">语音朗读</span>
-                    <span class="dh-item-status" id="dh-tts-status">已开启</span>
-                </button>
-                <button class="dh-panel-item" id="dh-test-voice">
-                    <span class="dh-item-icon">🎤</span>
-                    <span class="dh-item-label">测试语音</span>
-                </button>
-                <button class="dh-panel-item" id="dh-switch-model">
-                    <span class="dh-item-icon">�</span>
-                    <span class="dh-item-label">打招呼</span>
-                    <span class="dh-item-status" id="dh-model-status">萌少女</span>
-                </button>
-                <button class="dh-panel-item" id="dh-stop-voice">
-                    <span class="dh-item-icon">⏹</span>
-                    <span class="dh-item-label">停止说话</span>
-                </button>
-            </div>
-        `;
+        panelEl.innerHTML = '' +
+            '<button id="dh-panel-toggle" class="dh-panel-btn" title="数字人设置">' +
+              '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>' +
+                '<path d="M19 10v2a7 7 0 0 1-14 0v-2"/>' +
+                '<line x1="12" y1="19" x2="12" y2="23"/>' +
+                '<line x1="8" y1="23" x2="16" y2="23"/>' +
+              '</svg>' +
+            '</button>' +
+            '<div id="dh-panel-menu" class="dh-panel-menu hidden">' +
+                '<div class="dh-panel-header">数字人设置</div>' +
+                '<button class="dh-panel-item" id="dh-tts-toggle">' +
+                    '<span class="dh-item-icon">\uD83D\uDD0A</span>' +
+                    '<span class="dh-item-label">语音朗读</span>' +
+                    '<span class="dh-item-status" id="dh-tts-status">已开启</span>' +
+                '</button>' +
+                '<div class="dh-panel-divider"></div>' +
+                '<div class="dh-panel-subheader">TTS 引擎</div>' +
+                '<button class="dh-panel-item" id="dh-tts-engine">' +
+                    '<span class="dh-item-icon">\u2699\uFE0F</span>' +
+                    '<span class="dh-item-label">当前引擎</span>' +
+                    '<span class="dh-item-status" id="dh-engine-status">检测中...</span>' +
+                '</button>' +
+                '<button class="dh-panel-item" id="dh-voice-select">' +
+                    '<span class="dh-item-icon">\uD83C\uDF99\uFE0F</span>' +
+                    '<span class="dh-item-label">AI 音色</span>' +
+                    '<span class="dh-item-status" id="dh-voice-status">默认女声</span>' +
+                '</button>' +
+                '<button class="dh-panel-item" id="dh-ref-voice">' +
+                    '<span class="dh-item-icon">\uD83C\uDFB5</span>' +
+                    '<span class="dh-item-label">上传参考音频(克隆音色)</span>' +
+                    '<input id="dh-ref-input" type="file" accept="audio/*" style="display:none">' +
+                '</button>' +
+                '<div class="dh-panel-divider"></div>' +
+                '<button class="dh-panel-item" id="dh-test-voice">' +
+                    '<span class="dh-item-icon">\uD83C\uDFA4</span>' +
+                    '<span class="dh-item-label">测试语音</span>' +
+                '</button>' +
+                '<button class="dh-panel-item" id="dh-switch-model">' +
+                    '<span class="dh-item-icon">\uD83D\uDC4B</span>' +
+                    '<span class="dh-item-label">打招呼</span>' +
+                '</button>' +
+                '<button class="dh-panel-item" id="dh-stop-voice">' +
+                    '<span class="dh-item-icon">\u23F9</span>' +
+                    '<span class="dh-item-label">停止说话</span>' +
+                '</button>' +
+            '</div>';
         document.body.appendChild(panelEl);
 
-        // 样式
         const style = document.createElement('style');
-        style.textContent = `
-            #dh-panel {
-                position: fixed;
-                right: 16px;
-                bottom: 16px;
-                z-index: 10000;
-            }
-            .dh-panel-btn {
-                width: 44px; height: 44px;
-                border-radius: 50%;
-                background: linear-gradient(135deg, #9333ea, #ec4899);
-                border: none;
-                color: white;
-                cursor: pointer;
-                display: flex; align-items: center; justify-content: center;
-                box-shadow: 0 4px 12px rgba(147, 51, 234, 0.4);
-                transition: transform 0.2s;
-            }
-            .dh-panel-btn:hover { transform: scale(1.1); }
-            .dh-panel-menu {
-                position: absolute;
-                bottom: 52px;
-                right: 0;
-                background: rgba(20, 18, 35, 0.97);
-                border: 1px solid rgba(147, 51, 234, 0.3);
-                border-radius: 12px;
-                padding: 8px;
-                min-width: 200px;
-                backdrop-filter: blur(12px);
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-                transition: opacity 0.2s, transform 0.2s;
-            }
-            .dh-panel-menu.hidden {
-                opacity: 0;
-                transform: translateY(10px);
-                pointer-events: none;
-            }
-            .dh-panel-header {
-                font-size: 12px;
-                color: #9ca3af;
-                padding: 6px 12px;
-                border-bottom: 1px solid rgba(255,255,255,0.1);
-                margin-bottom: 4px;
-            }
-            .dh-panel-item {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                width: 100%;
-                padding: 10px 12px;
-                background: transparent;
-                border: none;
-                color: #e5e7eb;
-                font-size: 13px;
-                cursor: pointer;
-                border-radius: 8px;
-                transition: background 0.15s;
-            }
-            .dh-panel-item:hover { background: rgba(147, 51, 234, 0.15); }
-            .dh-item-icon { font-size: 16px; }
-            .dh-item-label { flex: 1; text-align: left; }
-            .dh-item-status { font-size: 11px; color: #a78bfa; }
-            @media (max-width: 480px) {
-                .dh-panel-menu { min-width: 180px; }
-            }
-        `;
+        style.textContent =
+            '#dh-panel{position:fixed;right:16px;bottom:16px;z-index:10000}' +
+            '.dh-panel-btn{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#9333ea,#ec4899);border:none;color:#fff;cursor:pointer;' +
+            'display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(147,51,234,.4);transition:transform .2s}' +
+            '.dh-panel-btn:hover{transform:scale(1.1)}' +
+            '.dh-panel-menu{position:absolute;bottom:52px;right:0;background:rgba(20,18,35,.97);border:1px solid rgba(147,51,234,.3);' +
+            'border-radius:12px;padding:8px;min-width:230px;backdrop-filter:blur(12px);box-shadow:0 8px 32px rgba(0,0,0,.5);' +
+            'transition:opacity .2s,transform .2s;max-height:80vh;overflow-y:auto}' +
+            '.dh-panel-menu.hidden{opacity:0;transform:translateY(10px);pointer-events:none}' +
+            '.dh-panel-header{font-size:12px;color:#9ca3af;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:4px}' +
+            '.dh-panel-subheader{font-size:11px;color:#6b7280;padding:4px 12px;margin-top:2px}' +
+            '.dh-panel-divider{height:1px;background:rgba(255,255,255,.06);margin:6px 4px}' +
+            '.dh-panel-item{display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;background:transparent;border:none;color:#e5e7eb;' +
+            'font-size:13px;cursor:pointer;border-radius:8px;transition:background .15s}' +
+            '.dh-panel-item:hover{background:rgba(147,51,234,.15)}' +
+            '.dh-item-icon{font-size:16px}' +
+            '.dh-item-label{flex:1;text-align:left}' +
+            '.dh-item-status{font-size:11px;color:#a78bfa}' +
+            '@media (max-width:480px){.dh-panel-menu{min-width:190px}}';
         document.head.appendChild(style);
 
-        // 事件
         const toggle = document.getElementById('dh-panel-toggle');
         const menu = document.getElementById('dh-panel-menu');
-        toggle.addEventListener('click', (e) => {
-            e.stopPropagation();
-            menu.classList.toggle('hidden');
-        });
-        document.addEventListener('click', (e) => {
-            if (!panelEl.contains(e.target)) menu.classList.add('hidden');
-        });
+        toggle.addEventListener('click', function (e) { e.stopPropagation(); menu.classList.toggle('hidden'); });
+        document.addEventListener('click', function (e) { if (panelEl && !panelEl.contains(e.target)) menu.classList.add('hidden'); });
 
-        // TTS 开关
-        document.getElementById('dh-tts-toggle').addEventListener('click', () => {
+        document.getElementById('dh-tts-toggle').addEventListener('click', function () {
             CONFIG.ttsEnabled = !CONFIG.ttsEnabled;
-            const status = document.getElementById('dh-tts-status');
-            status.textContent = CONFIG.ttsEnabled ? '已开启' : '已关闭';
-            status.style.color = CONFIG.ttsEnabled ? '#a78bfa' : '#6b7280';
+            const s = document.getElementById('dh-tts-status');
+            s.textContent = CONFIG.ttsEnabled ? '已开启' : '已关闭';
+            s.style.color = CONFIG.ttsEnabled ? '#a78bfa' : '#6b7280';
             if (!CONFIG.ttsEnabled) stopSpeaking();
             showBubble(CONFIG.ttsEnabled ? '语音已开启~' : '语音已关闭', 1500);
         });
 
-        // 测试语音
-        document.getElementById('dh-test-voice').addEventListener('click', () => {
+        document.getElementById('dh-test-voice').addEventListener('click', function () {
             speak('你好！我是小智，很高兴认识你！有什么可以帮你的吗？');
         });
 
-        // 打招呼（触发表情+动作）
-        document.getElementById('dh-switch-model').addEventListener('click', () => {
+        document.getElementById('dh-switch-model').addEventListener('click', function () {
             triggerExpression();
-            const greetings = ['嗨！你好呀~', '今天也要加油学习哦！', '有什么想聊的吗？'];
-            showBubble(greetings[Math.floor(Math.random() * greetings.length)], 2500);
+            const g = ['嗨！你好呀~', '今天也要加油学习哦！', '有什么想聊的吗？'];
+            showBubble(g[Math.floor(Math.random() * g.length)], 2500);
         });
 
-        // 停止说话
-        document.getElementById('dh-stop-voice').addEventListener('click', () => {
+        document.getElementById('dh-stop-voice').addEventListener('click', function () {
             stopSpeaking();
             showBubble('已停止说话', 1500);
         });
-    }
 
-    // ======================== 切换模型 ========================
-    async function switchModel() {
-        CONFIG.currentModelIndex = (CONFIG.currentModelIndex + 1) % CONFIG.models.length;
-        const modelConfig = CONFIG.models[CONFIG.currentModelIndex];
-        showBubble('切换为 ' + modelConfig.label + ' ~', 2000);
-
-        // 更新面板状态
-        const statusEl = document.getElementById('dh-model-status');
-        if (statusEl) statusEl.textContent = modelConfig.label;
-
-        if (!pixiApp) return;
-
-        // 移除旧模型
-        if (live2dModel) {
-            pixiApp.stage.removeChild(live2dModel);
-            live2dModel.destroy({ children: true, texture: true, baseTexture: true });
-            live2dModel = null;
-        }
-
-        // 加载新模型
-        try {
-            live2dModel = await loadModelFromSources(modelConfig.paths);
-            const scale = isMobile ? CONFIG.mobileScale : 1;
-            const h = CONFIG.height * scale;
-            const w = CONFIG.width * scale;
-            const modelScale = (h * 2 * 0.9) / live2dModel.internalModel.height;
-            live2dModel.scale.set(modelScale);
-            live2dModel.anchor.set(0.5, 0.9);
-            live2dModel.x = w;
-            live2dModel.y = h * 2;
-            pixiApp.stage.addChild(live2dModel);
-
-            live2dModel.on('hit', () => onCharacterClick());
-            triggerExpression();
-        } catch (e) {
-            console.error('[DigitalHuman] 切换模型失败:', e);
-            showBubble('切换失败，保持当前形象', 2000);
-        }
-    }
-
-    // ======================== 聊天集成 ========================
-    function setupChatIntegration() {
-        const chatContainer = document.getElementById('chat-container') ||
-            document.getElementById('chat-messages') ||
-            document.getElementById('messages') ||
-            document.querySelector('.chat-messages');
-
-        if (!chatContainer) return;
-
-        let lastSpokenText = '';
-
-        const observer = new MutationObserver(function (mutations) {
-            mutations.forEach(function (mutation) {
-                mutation.addedNodes.forEach(function (node) {
-                    if (node.nodeType !== 1) return;
-
-                    const aiMsg = node.matches?.('.bot-msg, .ai-message, .assistant, .bot-message')
-                        ? node
-                        : node.querySelector?.('.bot-msg, .ai-message, .assistant, .bot-message');
-
-                    if (aiMsg) {
-                        setTimeout(() => {
-                            const text = aiMsg.textContent?.trim();
-                            if (text && text.length > 2 && text !== lastSpokenText) {
-                                lastSpokenText = text;
-                                speak(text);
-                            }
-                        }, 800);
-                    }
-                });
-            });
+        document.getElementById('dh-tts-engine').addEventListener('click', async function () {
+            CONFIG.qwenTts.enabled = !CONFIG.qwenTts.enabled;
+            if (CONFIG.qwenTts.enabled) {
+                const ok = await loadTtsConfig();
+                if (!ok && !CONFIG.qwenTts.serverUrl) {
+                    showBubble('未发现QwenTTS后端，请先启动 tts_server.py', 3500);
+                    CONFIG.qwenTts.enabled = false;
+                } else {
+                    showBubble('已切换为 QwenTTS 自定义音色~', 2500);
+                }
+            } else {
+                showBubble('已切换为系统语音（WebSpeech）', 2500);
+            }
+            updateEngineStatusUI();
         });
 
-        observer.observe(chatContainer, { childList: true, subtree: true });
-        console.log('[DigitalHuman] 聊天集成已启动');
+        document.getElementById('dh-voice-select').addEventListener('click', async function () {
+            if (!CONFIG.qwenTts.enabled || !CONFIG.qwenTts.serverUrl) {
+                showBubble('请先启用QwenTTS引擎哦', 2500);
+                return;
+            }
+            try {
+                const r = await fetch(CONFIG.qwenTts.serverUrl + '/speakers');
+                if (!r.ok) throw new Error('http ' + r.status);
+                const d = await r.json();
+                const list = d.speakers || [];
+                if (!list.length) { showBubble('暂无可用音色，请上传参考音频', 2500); return; }
+                const idx = prompt('选择音色（输入序号 0-' + (list.length - 1) + '）\n' + list.map(function (s, i) { return i + '. ' + s; }).join('\n'));
+                if (idx === null) return;
+                const n = parseInt(idx, 10);
+                if (isNaN(n) || n < 0 || n >= list.length) return;
+                CONFIG.qwenTts.speaker = list[n];
+                document.getElementById('dh-voice-status').textContent = list[n];
+                showBubble('已切换音色：' + list[n], 2500);
+            } catch (e) {
+                showBubble('获取音色失败：' + (e && e.message || e), 3000);
+            }
+        });
+
+        document.getElementById('dh-ref-voice').addEventListener('click', function () {
+            if (!CONFIG.qwenTts.enabled || !CONFIG.qwenTts.serverUrl) {
+                showBubble('请先启用QwenTTS引擎哦', 2500);
+                return;
+            }
+            document.getElementById('dh-ref-input').click();
+        });
+        document.getElementById('dh-ref-input').addEventListener('change', async function (e) {
+            const file = e.target && e.target.files && e.target.files[0];
+            if (!file) return;
+            showBubble('正在克隆音色，请稍候...', 4000);
+            try {
+                const fd = new FormData();
+                fd.append('audio', file);
+                const name = (file.name || '我的音色').replace(/\.[^.]+$/, '').slice(0, 20) || '我的音色';
+                fd.append('speaker_name', name);
+                const r = await fetch(CONFIG.qwenTts.serverUrl + '/clone', { method: 'POST', body: fd });
+                if (!r.ok) throw new Error('http ' + r.status);
+                const d = await r.json();
+                if (d.ok) {
+                    CONFIG.qwenTts.speaker = d.speaker || name;
+                    document.getElementById('dh-voice-status').textContent = CONFIG.qwenTts.speaker;
+                    showBubble('音色克隆成功！' + CONFIG.qwenTts.speaker, 3500);
+                } else {
+                    throw new Error(d.error || '未知错误');
+                }
+            } catch (err) {
+                showBubble('克隆失败：' + (err && err.message || err), 4000);
+            } finally {
+                e.target.value = '';
+            }
+        });
+
+        updateEngineStatusUI();
     }
 
-    // ======================== 降级模式 ========================
+    function updateEngineStatusUI() {
+        const el = document.getElementById('dh-engine-status');
+        if (!el) return;
+        if (CONFIG.qwenTts.enabled && CONFIG.qwenTts.serverUrl) {
+            el.textContent = 'QwenTTS';
+            el.style.color = '#34d399';
+        } else {
+            el.textContent = '系统语音';
+            el.style.color = '#a78bfa';
+        }
+    }
+
+    // ========== 聊天集成 ==========
+    function scheduleSpeakForElement(el) {
+        const key = el;
+        const prev = textStableTimers.get(key);
+        if (prev) clearTimeout(prev);
+
+        function run() {
+            const text = extractTextFromBotMsg(el);
+            if (isBlacklisted(text)) { textStableTimers.delete(key); return; }
+            const sig = textSignature(text);
+            const lastSig = el.__lastSig;
+            el.__lastSig = sig;
+            if (lastSig === sig && sig && text && text.length > 2) {
+                textStableTimers.delete(key);
+                speak(text);
+            } else {
+                const t = setTimeout(run, 1500);
+                textStableTimers.set(key, t);
+            }
+        }
+        const t = setTimeout(run, 1500);
+        textStableTimers.set(key, t);
+    }
+
+    function setupChatIntegration() {
+        const chatContainer = document.getElementById('chat-container')
+            || document.getElementById('chat-messages')
+            || document.getElementById('messages')
+            || document.querySelector('.chat-messages');
+        if (!chatContainer) return;
+
+        chatContainer.querySelectorAll('.bot-msg, .ai-message, .assistant, .bot-message').forEach(function (el) { scheduleSpeakForElement(el); });
+
+        const SEL = '.bot-msg, .ai-message, .assistant, .bot-message';
+        const observer = new MutationObserver(function (mutations) {
+            for (let mi = 0; mi < mutations.length; mi++) {
+                const m = mutations[mi];
+                if (m.addedNodes && m.addedNodes.length) {
+                    for (let ni = 0; ni < m.addedNodes.length; ni++) {
+                        const nd = m.addedNodes[ni];
+                        if (nd.nodeType !== 1) continue;
+                        const aiMsg = (nd.matches && nd.matches(SEL)) ? nd : (nd.querySelector && nd.querySelector(SEL));
+                        if (aiMsg) scheduleSpeakForElement(aiMsg);
+                    }
+                }
+                if (m.type === 'characterData' || (m.type === 'childList' && m.target && m.target.nodeType === 1)) {
+                    let tgt = m.target;
+                    while (tgt && tgt !== chatContainer) {
+                        if (tgt.nodeType === 1 && tgt.matches && tgt.matches(SEL)) {
+                            scheduleSpeakForElement(tgt);
+                            break;
+                        }
+                        tgt = tgt.parentNode;
+                    }
+                }
+            }
+        });
+
+        observer.observe(chatContainer, {
+            childList: true, subtree: true, characterData: true, characterDataOldValue: false,
+        });
+        console.log('[DigitalHuman] 聊天集成已启动（文本稳定检测）');
+    }
+
+    // ========== 初始化 ==========
     function initFallback() {
-        canvasEl = document.createElement('div');
-        canvasEl.id = 'dh-fallback';
-        canvasEl.style.cssText = `
-            position: fixed;
-            width: 64px; height: 64px;
-            font-size: 52px;
-            display: flex; align-items: center; justify-content: center;
-            z-index: 9998;
-            cursor: pointer;
-            user-select: none;
-            transition: transform 0.2s;
-        `;
-        canvasEl.textContent = '🐱';
-        document.body.appendChild(canvasEl);
-
-        position.x = CONFIG.margin;
-        position.y = window.innerHeight - 80 - CONFIG.margin;
-        canvasEl.style.left = position.x + 'px';
-        canvasEl.style.top = position.y + 'px';
-
-        canvasEl.addEventListener('click', onCharacterClick);
-
-        state = 'idle';
-        lastActionTime = Date.now();
-        startBehaviorLoop();
-        startTipLoop();
-
-        setTimeout(() => showBubble('你好！我是小智~（Live2D加载失败，使用emoji模式）', 3000), 500);
+        if (!fallbackEl) showEmojiPlaceholder();
+        initFallbackBehavior();
     }
 
-    // ======================== 窗口大小变化 ========================
     window.addEventListener('resize', function () {
         isMobile = window.innerWidth < 768;
-        const scale = isMobile ? CONFIG.mobileScale : 1;
-        const charH = CONFIG.height * scale;
-
-        if (position.y + charH > window.innerHeight) {
-            position.y = window.innerHeight - charH - CONFIG.margin;
+        const sc = isMobile ? CONFIG.mobileScale : 1;
+        const ch = CONFIG.height * sc;
+        if (position.y + ch > window.innerHeight) {
+            position.y = window.innerHeight - ch - CONFIG.margin;
             updatePosition();
         }
-        if (position.x + CONFIG.width * scale > window.innerWidth) {
-            position.x = window.innerWidth - CONFIG.width * scale - CONFIG.margin;
+        const cw = CONFIG.width * sc;
+        if (position.x + cw > window.innerWidth) {
+            position.x = window.innerWidth - cw - CONFIG.margin;
             updatePosition();
         }
     });
 
-    // ======================== 页面可见性 ========================
     document.addEventListener('visibilitychange', function () {
         if (document.hidden) {
-            if (window.speechSynthesis) speechSynthesis.cancel();
-            stopMouthAnimation();
+            stopSpeaking();
             state = 'idle';
             targetPos = null;
         }
     });
 
-    // ======================== 公共 API ========================
     window.DigitalHuman = {
         speak: speak,
         showBubble: showBubble,
         stopSpeaking: stopSpeaking,
-        switchModel: switchModel,
         triggerExpression: triggerExpression,
         setTtsEnabled: function (enabled) {
             CONFIG.ttsEnabled = enabled;
-            const status = document.getElementById('dh-tts-status');
-            if (status) {
-                status.textContent = enabled ? '已开启' : '已关闭';
-                status.style.color = enabled ? '#a78bfa' : '#6b7280';
-            }
+            const s = document.getElementById('dh-tts-status');
+            if (s) { s.textContent = enabled ? '已开启' : '已关闭'; s.style.color = enabled ? '#a78bfa' : '#6b7280'; }
+        },
+        setQwenTtsUrl: function (url, speaker) {
+            CONFIG.qwenTts.enabled = !!url;
+            CONFIG.qwenTts.serverUrl = url;
+            if (speaker) CONFIG.qwenTts.speaker = speaker;
+            updateEngineStatusUI();
         },
         getState: function () { return state; },
-        getPosition: function () { return { ...position }; },
+        getPosition: function () { return { x: position.x, y: position.y }; },
     };
 
-    // ======================== 初始化 ========================
     function init() {
-        console.log('[DigitalHuman] 初始化中...');
+        console.log('[DigitalHuman] 初始化...');
+        showEmojiPlaceholder();
         createControlPanel();
+        loadTtsConfig().then(updateEngineStatusUI);
         initLive2D();
-        setTimeout(setupChatIntegration, 2000);
+        setTimeout(setupChatIntegration, 1500);
     }
 
     if (document.readyState === 'loading') {
