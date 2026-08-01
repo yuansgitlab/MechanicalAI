@@ -1,44 +1,69 @@
 /**
- * Digital Human Module - Live2D 看板娘 + 游走 + TTS语音 + 表情
- * 用于 MechanicalAI 全站数字人陪伴功能
+ * Digital Human Module - Live2D + 游走 + TTS语音 + 表情 + 唇形同步
+ * 使用 pixi-live2d-display 实现完整编程控制
  */
 (function () {
     'use strict';
 
     // ======================== 配置 ========================
     const CONFIG = {
-        // Live2D 模型列表（可爱风格，均含表情动画）
+        // Live2D 模型（Cubism 2 格式，可爱风格）
         models: [
-            { name: 'Hijiki', path: 'https://cdn.jsdelivr.net/gh/fghrsh/live2d_api/model/Hijiki/Hijiki.model.json', label: '小黑猫' },
-            { name: 'Shizuku', path: 'https://cdn.jsdelivr.net/gh/fghrsh/live2d_api/model/Shizuku/Shizuku.model.json', label: '萌少女' },
-            { name: 'Pio', path: 'https://cdn.jsdelivr.net/gh/fghrsh/live2d_api/model/Pio/model.json', label: '小白猫' },
+            {
+                name: 'Hijiki',
+                label: '小黑猫',
+                // 多源备用：jsDelivr → fastly
+                paths: [
+                    'https://cdn.jsdelivr.net/gh/fghrsh/live2d_api/model/Hijiki/Hijiki.model.json',
+                    'https://fastly.jsdelivr.net/gh/fghrsh/live2d_api/model/Hijiki/Hijiki.model.json',
+                ]
+            },
+            {
+                name: 'Pio',
+                label: '小白猫',
+                paths: [
+                    'https://cdn.jsdelivr.net/gh/fghrsh/live2d_api/model/Pio/model.json',
+                    'https://fastly.jsdelivr.net/gh/fghrsh/live2d_api/model/Pio/model.json',
+                ]
+            },
+            {
+                name: 'Shizuku',
+                label: '萌少女',
+                paths: [
+                    'https://cdn.jsdelivr.net/gh/fghrsh/live2d_api/model/Shizuku/Shizuku.model.json',
+                    'https://fastly.jsdelivr.net/gh/fghrsh/live2d_api/model/Shizuku/Shizuku.model.json',
+                ]
+            },
         ],
         currentModelIndex: 0,
 
-        // SDK
-        cubismSdkUrl: 'https://cdn.jsdelivr.net/gh/stevenjoezhang/live2d-widget/lib/live2d.min.js',
-        widgetUrl: 'https://cdn.jsdelivr.net/gh/stevenjoezhang/live2d-widget/lib/L2Dwidget.min.js',
+        // 依赖 CDN
+        deps: {
+            pixi: 'https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js',
+            cubism2Core: 'https://cdn.jsdelivr.net/gh/stevenjoezhang/live2d-widget/lib/live2d.min.js',
+            pixiLive2D: 'https://cdn.jsdelivr.net/npm/pixi-live2d-display/dist/cubism2.min.js',
+        },
 
         // 显示
-        width: 180,
-        height: 260,
-        mobileScale: 0.6,
+        width: 200,
+        height: 280,
+        mobileScale: 0.65,
 
         // 游走
-        walkSpeed: 30,          // px/秒
-        idleDuration: 5000,     // 闲置多久后开始走
+        walkSpeed: 35,
+        idleDuration: 6000,
         margin: 10,
 
         // TTS
         ttsLang: 'zh-CN',
         ttsRate: 1.0,
-        ttsPitch: 1.3,          // 偏高音 = 可爱
+        ttsPitch: 1.3,
         ttsEnabled: true,
 
         // 提示语
         tips: [
             '有问题随时问我哦~',
-            '点击开始对话，让我帮你学习！',
+            '点击导航栏开始对话！',
             '我懂很多机械工程的知识呢',
             '需要制定学习规划吗？',
             '试试问我"解释PID控制器原理"',
@@ -48,8 +73,10 @@
     };
 
     // ======================== 状态 ========================
-    let state = 'loading';       // loading, idle, walking, talking
-    let widgetEl = null;         // Live2D canvas 容器
+    let state = 'loading';
+    let pixiApp = null;
+    let live2dModel = null;
+    let canvasEl = null;
     let position = { x: 10, y: 0 };
     let targetPos = null;
     let lastActionTime = Date.now();
@@ -57,135 +84,141 @@
     let voicesReady = false;
     let mouthTimer = null;
     let tipTimer = null;
+    let panelEl = null;
+    let audioAnalyser = null;
+    let audioContext = null;
 
-    // ======================== 加载 Live2D ========================
+    // ======================== 工具函数 ========================
     function loadScript(url) {
         return new Promise((resolve, reject) => {
             const s = document.createElement('script');
             s.src = url;
             s.onload = resolve;
-            s.onerror = () => reject(new Error('Failed: ' + url));
+            s.onerror = () => reject(new Error('加载失败: ' + url));
             document.head.appendChild(s);
         });
     }
 
-    async function loadLive2D() {
+    async function loadModelFromSources(paths) {
+        for (const path of paths) {
+            try {
+                const model = await PIXI.live2d.Live2DModel.from(path);
+                return model;
+            } catch (e) {
+                console.warn('[DigitalHuman] 模型源失败:', path, e.message);
+            }
+        }
+        throw new Error('所有模型源均失败');
+    }
+
+    // ======================== 加载依赖 ========================
+    async function loadDependencies() {
+        // 1. PixiJS
+        if (typeof PIXI === 'undefined') {
+            await loadScript(CONFIG.deps.pixi);
+        }
+        // 2. Cubism 2 Core
+        if (typeof Live2D === 'undefined') {
+            await loadScript(CONFIG.deps.cubism2Core);
+        }
+        // 3. pixi-live2d-display
+        if (typeof PIXI.live2d === 'undefined') {
+            await loadScript(CONFIG.deps.pixiLive2D);
+        }
+    }
+
+    // ======================== 初始化 Live2D ========================
+    async function initLive2D() {
         try {
-            // 1. 加载 Cubism SDK
-            if (typeof Live2D === 'undefined') {
-                await loadScript(CONFIG.cubismSdkUrl);
-            }
-            // 2. 加载 L2Dwidget
-            if (typeof L2Dwidget === 'undefined') {
-                await loadScript(CONFIG.widgetUrl);
-            }
-            // 3. 初始化模型
-            initWidget();
+            await loadDependencies();
+            console.log('[DigitalHuman] 依赖加载完成');
+
+            const scale = isMobile ? CONFIG.mobileScale : 1;
+            const w = CONFIG.width * scale;
+            const h = CONFIG.height * scale;
+
+            // 创建 Canvas 容器
+            canvasEl = document.createElement('canvas');
+            canvasEl.id = 'dh-canvas';
+            canvasEl.width = w * 2;  // 高清
+            canvasEl.height = h * 2;
+            canvasEl.style.cssText = `
+                position: fixed;
+                left: ${position.x}px;
+                top: ${position.y}px;
+                width: ${w}px;
+                height: ${h}px;
+                z-index: 9998;
+                pointer-events: auto;
+                cursor: pointer;
+                transition: filter 0.2s;
+            `;
+            document.body.appendChild(canvasEl);
+
+            // 创建 PixiJS 应用
+            pixiApp = new PIXI.Application({
+                view: canvasEl,
+                transparent: true,
+                width: w * 2,
+                height: h * 2,
+                autoStart: true,
+            });
+
+            // 加载模型
+            const modelConfig = CONFIG.models[CONFIG.currentModelIndex];
+            console.log('[DigitalHuman] 正在加载模型:', modelConfig.label);
+            live2dModel = await loadModelFromSources(modelConfig.paths);
+
+            // 调整模型大小和位置
+            const modelScale = (h * 2 * 0.9) / live2dModel.internalModel.height;
+            live2dModel.scale.set(modelScale);
+            live2dModel.anchor.set(0.5, 0.9);
+            live2dModel.x = w;  // canvas 中心
+            live2dModel.y = h * 2;
+
+            pixiApp.stage.addChild(live2dModel);
+
+            // 点击交互
+            live2dModel.on('hit', (hitAreas) => {
+                onCharacterClick();
+            });
+
+            canvasEl.addEventListener('click', onCharacterClick);
+            canvasEl.addEventListener('touchstart', onCharacterClick, { passive: true });
+
+            // 初始位置
+            position.x = CONFIG.margin;
+            position.y = window.innerHeight - h - CONFIG.margin;
+            updatePosition();
+
+            state = 'idle';
+            lastActionTime = Date.now();
+
+            startBehaviorLoop();
+            startTipLoop();
+
+            // 欢迎动画
+            setTimeout(() => {
+                showBubble('你好！我是小智，你的AI学习伙伴~', 4000);
+                triggerExpression();
+            }, 800);
+
+            console.log('[DigitalHuman] 数字人已就绪:', modelConfig.label);
+
         } catch (e) {
-            console.error('[DigitalHuman] Live2D 加载失败，启用降级模式:', e);
+            console.error('[DigitalHuman] Live2D 初始化失败:', e);
             initFallback();
         }
     }
 
-    function initWidget() {
-        const model = CONFIG.models[CONFIG.currentModelIndex];
-        const scale = isMobile ? CONFIG.mobileScale : 1;
-
-        L2Dwidget.init({
-            model: { jsonPath: model.path, scale: 1 },
-            display: {
-                position: 'left',
-                width: CONFIG.width * scale,
-                height: CONFIG.height * scale,
-                hOffset: 0,
-                vOffset: 0,
-            },
-            mobile: { show: true, scale: 0.5 },
-            react: { opacity: 1 },
-        });
-
-        // 等待渲染后接管控制
-        setTimeout(takeControl, 1500);
-    }
-
-    // ======================== 接管 DOM 控制权 ========================
-    function takeControl() {
-        widgetEl = document.getElementById('live2d-widget') ||
-            document.querySelector('.live2d-widget') ||
-            findWidgetCanvas();
-
-        if (!widgetEl) {
-            console.warn('[DigitalHuman] 未找到 widget 元素，重试中...');
-            setTimeout(takeControl, 1000);
-            return;
-        }
-
-        // 覆盖默认样式，改为可自由定位
-        const scale = isMobile ? CONFIG.mobileScale : 1;
-        widgetEl.style.cssText = `
-            position: fixed !important;
-            left: ${position.x}px !important;
-            top: ${position.y}px !important;
-            right: auto !important;
-            bottom: auto !important;
-            z-index: 9998 !important;
-            pointer-events: auto !important;
-            transition: transform 0.2s ease !important;
-            cursor: pointer !important;
-            width: ${CONFIG.width * scale}px !important;
-            height: ${CONFIG.height * scale}px !important;
-        `;
-
-        // 初始位置：左下角
-        position.x = CONFIG.margin;
-        position.y = window.innerHeight - CONFIG.height * (isMobile ? CONFIG.mobileScale : 1) - CONFIG.margin;
-        updatePosition();
-
-        // 点击交互
-        widgetEl.addEventListener('click', onCharacterClick);
-        widgetEl.addEventListener('touchstart', onCharacterClick, { passive: true });
-
-        state = 'idle';
-        lastActionTime = Date.now();
-
-        // 启动行为循环
-        startBehaviorLoop();
-
-        // 启动提示循环
-        startTipLoop();
-
-        // 欢迎语
-        setTimeout(() => {
-            showBubble('你好！我是小智，你的AI学习伙伴~', 4000);
-        }, 500);
-
-        console.log('[DigitalHuman] 数字人已就绪');
-    }
-
-    function findWidgetCanvas() {
-        const canvases = document.querySelectorAll('canvas');
-        for (const c of canvases) {
-            if (c.parentElement && (c.parentElement.id.includes('live2d') ||
-                c.parentElement.className.includes('live2d'))) {
-                return c.parentElement;
-            }
-        }
-        // 最后回退：取最后一个 canvas
-        if (canvases.length > 0) {
-            const parent = canvases[canvases.length - 1].parentElement;
-            parent.id = 'live2d-widget';
-            return parent;
-        }
-        return null;
-    }
-
+    // ======================== 位置更新 ========================
     function updatePosition() {
-        if (!widgetEl) return;
-        widgetEl.style.left = position.x + 'px';
-        widgetEl.style.top = position.y + 'px';
+        if (!canvasEl) return;
+        canvasEl.style.left = position.x + 'px';
+        canvasEl.style.top = position.y + 'px';
     }
 
-    // ======================== 行为循环（游走 + 闲置） ========================
+    // ======================== 行为循环 ========================
     function startBehaviorLoop() {
         function loop() {
             const now = Date.now();
@@ -193,6 +226,13 @@
             if (state === 'idle') {
                 if (now - lastActionTime > CONFIG.idleDuration) {
                     startWalking();
+                }
+                // 待机微动：头部轻微摇摆
+                if (live2dModel && Math.random() < 0.01) {
+                    try {
+                        live2dModel.internalModel.coreModel.setParameterValueById('PARAM_BODY_ANGLE_X', (Math.random() - 0.5) * 5);
+                        live2dModel.internalModel.coreModel.setParameterValueById('PARAM_BODY_ANGLE_Y', (Math.random() - 0.5) * 3);
+                    } catch (e) { /* 静默 */ }
                 }
             } else if (state === 'walking' && targetPos) {
                 const dx = targetPos.x - position.x;
@@ -203,17 +243,26 @@
                     state = 'idle';
                     lastActionTime = now;
                     targetPos = null;
-                    if (widgetEl) widgetEl.style.transform = 'scaleX(1)';
+                    if (canvasEl) canvasEl.style.transform = 'scaleX(1)';
                 } else {
                     const speed = CONFIG.walkSpeed / 60;
                     position.x += (dx / dist) * speed;
                     position.y += (dy / dist) * speed;
 
                     // 朝向翻转
-                    if (widgetEl) {
-                        widgetEl.style.transform = dx < 0 ? 'scaleX(-1)' : 'scaleX(1)';
+                    if (canvasEl) {
+                        canvasEl.style.transform = dx < 0 ? 'scaleX(-1)' : 'scaleX(1)';
                     }
                     updatePosition();
+
+                    // 行走时身体晃动
+                    if (live2dModel) {
+                        try {
+                            const sway = Math.sin(now / 150) * 8;
+                            live2dModel.internalModel.coreModel.setParameterValueById('PARAM_BODY_ANGLE_X', sway);
+                            live2dModel.internalModel.coreModel.setParameterValueById('PARAM_BREATH', 1);
+                        } catch (e) { /* 静默 */ }
+                    }
                 }
             }
 
@@ -228,20 +277,17 @@
         const charW = CONFIG.width * scale;
         const charH = CONFIG.height * scale;
 
-        // 沿屏幕边缘游走，避免遮挡中心内容
-        const edge = Math.floor(Math.random() * 4); // 0=底 1=左 2=右 3=底
+        // 沿屏幕边缘游走
+        const edge = Math.floor(Math.random() * 4);
         let tx, ty;
 
         if (edge === 0 || edge === 3) {
-            // 底部
             tx = CONFIG.margin + Math.random() * (window.innerWidth - charW - CONFIG.margin * 2);
             ty = window.innerHeight - charH - CONFIG.margin;
         } else if (edge === 1) {
-            // 左侧
             tx = CONFIG.margin;
             ty = window.innerHeight * 0.3 + Math.random() * (window.innerHeight * 0.4 - charH);
         } else {
-            // 右侧
             tx = window.innerWidth - charW - CONFIG.margin;
             ty = window.innerHeight * 0.3 + Math.random() * (window.innerHeight * 0.4 - charH);
         }
@@ -256,7 +302,6 @@
                 const tip = CONFIG.tips[Math.floor(Math.random() * CONFIG.tips.length)];
                 showBubble(tip, 3500);
             }
-            // 随机间隔 20-40 秒
             tipTimer = setTimeout(showNextTip, 20000 + Math.random() * 20000);
         }
         tipTimer = setTimeout(showNextTip, 15000);
@@ -266,7 +311,6 @@
     function onCharacterClick(e) {
         if (e) e.stopPropagation();
         if (state === 'talking') {
-            // 说话时点击 = 停止说话
             stopSpeaking();
             return;
         }
@@ -275,10 +319,8 @@
         targetPos = null;
         lastActionTime = Date.now();
 
-        // 随机表情/动作
         triggerExpression();
 
-        // 随机问候
         const greetings = [
             '嗨！想聊点什么？',
             '有什么我可以帮你的吗？',
@@ -291,27 +333,32 @@
 
     // ======================== 表情/动作 ========================
     function triggerExpression(name) {
+        if (!live2dModel) return;
         try {
-            // 尝试通过 L2Dwidget 内部模型触发动作
-            const main = L2Dwidget?.main;
-            if (main && main.model) {
-                const model = main.model;
-                if (name && model.startRandomMotion) {
-                    model.startRandomMotion(name);
-                } else if (model.startRandomMotion) {
-                    model.startRandomMotion('tap_body');
+            // 尝试触发随机表情
+            if (live2dModel.expression) {
+                const expressions = live2dModel.internalModel.settings.expressions;
+                if (expressions && expressions.length > 0) {
+                    const idx = Math.floor(Math.random() * expressions.length);
+                    live2dModel.expression(idx);
                 }
             }
+
+            // 触发随机动作
+            if (live2dModel.motion) {
+                live2dModel.motion('tap_body');
+            }
         } catch (e) {
-            // 静默失败，表情是锦上添花
+            // 静默
         }
 
-        // CSS 弹跳效果（作为表情视觉反馈）
-        if (widgetEl) {
-            widgetEl.style.transform = (widgetEl.style.transform || '') + ' translateY(-8px)';
+        // CSS 弹跳
+        if (canvasEl) {
+            const currentTransform = canvasEl.style.transform.replace(/ translateY\(-\d+px\)/, '');
+            canvasEl.style.transform = currentTransform + ' translateY(-10px)';
             setTimeout(() => {
-                if (widgetEl) {
-                    widgetEl.style.transform = widgetEl.style.transform.replace(' translateY(-8px)', '');
+                if (canvasEl) {
+                    canvasEl.style.transform = canvasEl.style.transform.replace(' translateY(-10px)', '');
                 }
             }, 200);
         }
@@ -334,7 +381,6 @@
     function speak(text) {
         if (!CONFIG.ttsEnabled || !window.speechSynthesis) return;
 
-        // 取消正在进行的语音
         speechSynthesis.cancel();
         stopMouthAnimation();
 
@@ -351,7 +397,6 @@
 
         if (!cleanText || cleanText.length < 2) return;
 
-        // 限制长度（避免太长的语音）
         const speakText = cleanText.length > 200
             ? cleanText.substring(0, 200) + '...'
             : cleanText;
@@ -361,7 +406,6 @@
         utterance.rate = CONFIG.ttsRate;
         utterance.pitch = CONFIG.ttsPitch;
 
-        // 选择中文语音
         if (voicesReady) {
             const voices = speechSynthesis.getVoices();
             const zhVoice = voices.find(v => v.lang.startsWith('zh') && v.name.includes('Female')) ||
@@ -373,7 +417,7 @@
         utterance.onstart = function () {
             state = 'talking';
             targetPos = null;
-            if (widgetEl) widgetEl.style.transform = 'scaleX(1)';
+            if (canvasEl) canvasEl.style.transform = canvasEl.style.transform.replace('scaleX(-1)', 'scaleX(1)');
             showBubble(speakText.length > 80 ? speakText.substring(0, 80) + '...' : speakText, speakText.length * 120);
             startMouthAnimation();
         };
@@ -400,30 +444,31 @@
         lastActionTime = Date.now();
     }
 
-    // ======================== 嘴部动画（模拟说话） ========================
+    // ======================== 嘴部动画（唇形同步） ========================
     function startMouthAnimation() {
         if (mouthTimer) clearInterval(mouthTimer);
 
         mouthTimer = setInterval(() => {
+            if (!live2dModel) return;
             try {
-                // 尝试驱动 Live2D 模型嘴部参数
-                const main = L2Dwidget?.main;
-                if (main && main.model) {
-                    const model = main.model;
-                    const openAmount = Math.random() * 0.8 + 0.1;
-                    // Cubism 2 参数名
-                    if (model.setParameterValueById) {
-                        model.setParameterValueById('PARAM_MOUTH_OPEN_Y', openAmount);
-                    }
+                const coreModel = live2dModel.internalModel.coreModel;
+                // 模拟说话嘴部动作（随机开合，模拟音节节奏）
+                const openAmount = Math.random() * 0.7 + 0.2;
+                coreModel.setParameterValueById('PARAM_MOUTH_OPEN_Y', openAmount);
+
+                // 眼睛偶尔眨眼
+                if (Math.random() < 0.1) {
+                    coreModel.setParameterValueById('PARAM_EYE_L_OPEN', 0.1);
+                    coreModel.setParameterValueById('PARAM_EYE_R_OPEN', 0.1);
+                    setTimeout(() => {
+                        try {
+                            coreModel.setParameterValueById('PARAM_EYE_L_OPEN', 1);
+                            coreModel.setParameterValueById('PARAM_EYE_R_OPEN', 1);
+                        } catch (e) { /* 静默 */ }
+                    }, 100);
                 }
             } catch (e) { /* 静默 */ }
-
-            // CSS 弹跳效果（视觉说话反馈）
-            if (widgetEl) {
-                const bounce = Math.random() * 4 - 2;
-                widgetEl.style.filter = `brightness(${1 + bounce * 0.05})`;
-            }
-        }, 80);
+        }, 90);
     }
 
     function stopMouthAnimation() {
@@ -431,18 +476,15 @@
             clearInterval(mouthTimer);
             mouthTimer = null;
         }
-        try {
-            const main = L2Dwidget?.main;
-            if (main && main.model && main.model.setParameterValueById) {
-                main.model.setParameterValueById('PARAM_MOUTH_OPEN_Y', 0);
-            }
-        } catch (e) { /* 静默 */ }
-        if (widgetEl) widgetEl.style.filter = '';
+        if (live2dModel) {
+            try {
+                live2dModel.internalModel.coreModel.setParameterValueById('PARAM_MOUTH_OPEN_Y', 0);
+            } catch (e) { /* 静默 */ }
+        }
     }
 
     // ======================== 对话气泡 ========================
     function showBubble(text, duration) {
-        // 移除旧气泡
         const old = document.querySelector('.dh-bubble');
         if (old) old.remove();
 
@@ -451,15 +493,12 @@
         bubble.textContent = text;
         document.body.appendChild(bubble);
 
-        // 定位（在角色上方）
-        const scale = isMobile ? CONFIG.mobileScale : 1;
         requestAnimationFrame(() => {
             bubble.style.left = (position.x + 10) + 'px';
             bubble.style.top = (position.y - 50) + 'px';
             bubble.classList.add('dh-bubble-show');
         });
 
-        // 自动消失
         const dur = duration || 3000;
         setTimeout(() => {
             bubble.classList.remove('dh-bubble-show');
@@ -467,34 +506,193 @@
         }, dur);
     }
 
-    // ======================== 切换模型 ========================
-    function switchModel() {
-        CONFIG.currentModelIndex = (CONFIG.currentModelIndex + 1) % CONFIG.models.length;
-        const model = CONFIG.models[CONFIG.currentModelIndex];
-        showBubble('切换为 ' + model.label + ' ~', 2000);
+    // ======================== TTS 控制面板 ========================
+    function createControlPanel() {
+        panelEl = document.createElement('div');
+        panelEl.id = 'dh-panel';
+        panelEl.innerHTML = `
+            <button id="dh-panel-toggle" class="dh-panel-btn" title="数字人设置">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+            </button>
+            <div id="dh-panel-menu" class="dh-panel-menu hidden">
+                <div class="dh-panel-header">数字人设置</div>
+                <button class="dh-panel-item" id="dh-tts-toggle">
+                    <span class="dh-item-icon">🔊</span>
+                    <span class="dh-item-label">语音朗读</span>
+                    <span class="dh-item-status" id="dh-tts-status">已开启</span>
+                </button>
+                <button class="dh-panel-item" id="dh-test-voice">
+                    <span class="dh-item-icon">🎤</span>
+                    <span class="dh-item-label">测试语音</span>
+                </button>
+                <button class="dh-panel-item" id="dh-switch-model">
+                    <span class="dh-item-icon">🐱</span>
+                    <span class="dh-item-label">切换形象</span>
+                    <span class="dh-item-status" id="dh-model-status">小黑猫</span>
+                </button>
+                <button class="dh-panel-item" id="dh-stop-voice">
+                    <span class="dh-item-icon">⏹</span>
+                    <span class="dh-item-label">停止说话</span>
+                </button>
+            </div>
+        `;
+        document.body.appendChild(panelEl);
 
-        // 重新初始化
-        if (typeof L2Dwidget !== 'undefined') {
-            try {
-                L2Dwidget.init({
-                    model: { jsonPath: model.path, scale: 1 },
-                    display: {
-                        position: 'left',
-                        width: CONFIG.width * (isMobile ? CONFIG.mobileScale : 1),
-                        height: CONFIG.height * (isMobile ? CONFIG.mobileScale : 1),
-                    },
-                    mobile: { show: true, scale: 0.5 },
-                    react: { opacity: 1 },
-                });
-            } catch (e) {
-                console.error('[DigitalHuman] 切换模型失败:', e);
+        // 样式
+        const style = document.createElement('style');
+        style.textContent = `
+            #dh-panel {
+                position: fixed;
+                right: 16px;
+                bottom: 16px;
+                z-index: 10000;
             }
+            .dh-panel-btn {
+                width: 44px; height: 44px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #9333ea, #ec4899);
+                border: none;
+                color: white;
+                cursor: pointer;
+                display: flex; align-items: center; justify-content: center;
+                box-shadow: 0 4px 12px rgba(147, 51, 234, 0.4);
+                transition: transform 0.2s;
+            }
+            .dh-panel-btn:hover { transform: scale(1.1); }
+            .dh-panel-menu {
+                position: absolute;
+                bottom: 52px;
+                right: 0;
+                background: rgba(20, 18, 35, 0.97);
+                border: 1px solid rgba(147, 51, 234, 0.3);
+                border-radius: 12px;
+                padding: 8px;
+                min-width: 200px;
+                backdrop-filter: blur(12px);
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+                transition: opacity 0.2s, transform 0.2s;
+            }
+            .dh-panel-menu.hidden {
+                opacity: 0;
+                transform: translateY(10px);
+                pointer-events: none;
+            }
+            .dh-panel-header {
+                font-size: 12px;
+                color: #9ca3af;
+                padding: 6px 12px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+                margin-bottom: 4px;
+            }
+            .dh-panel-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                width: 100%;
+                padding: 10px 12px;
+                background: transparent;
+                border: none;
+                color: #e5e7eb;
+                font-size: 13px;
+                cursor: pointer;
+                border-radius: 8px;
+                transition: background 0.15s;
+            }
+            .dh-panel-item:hover { background: rgba(147, 51, 234, 0.15); }
+            .dh-item-icon { font-size: 16px; }
+            .dh-item-label { flex: 1; text-align: left; }
+            .dh-item-status { font-size: 11px; color: #a78bfa; }
+            @media (max-width: 480px) {
+                .dh-panel-menu { min-width: 180px; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // 事件
+        const toggle = document.getElementById('dh-panel-toggle');
+        const menu = document.getElementById('dh-panel-menu');
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menu.classList.toggle('hidden');
+        });
+        document.addEventListener('click', (e) => {
+            if (!panelEl.contains(e.target)) menu.classList.add('hidden');
+        });
+
+        // TTS 开关
+        document.getElementById('dh-tts-toggle').addEventListener('click', () => {
+            CONFIG.ttsEnabled = !CONFIG.ttsEnabled;
+            const status = document.getElementById('dh-tts-status');
+            status.textContent = CONFIG.ttsEnabled ? '已开启' : '已关闭';
+            status.style.color = CONFIG.ttsEnabled ? '#a78bfa' : '#6b7280';
+            if (!CONFIG.ttsEnabled) stopSpeaking();
+            showBubble(CONFIG.ttsEnabled ? '语音已开启~' : '语音已关闭', 1500);
+        });
+
+        // 测试语音
+        document.getElementById('dh-test-voice').addEventListener('click', () => {
+            speak('你好！我是小智，很高兴认识你！有什么可以帮你的吗？');
+        });
+
+        // 切换模型
+        document.getElementById('dh-switch-model').addEventListener('click', () => {
+            switchModel();
+        });
+
+        // 停止说话
+        document.getElementById('dh-stop-voice').addEventListener('click', () => {
+            stopSpeaking();
+            showBubble('已停止说话', 1500);
+        });
+    }
+
+    // ======================== 切换模型 ========================
+    async function switchModel() {
+        CONFIG.currentModelIndex = (CONFIG.currentModelIndex + 1) % CONFIG.models.length;
+        const modelConfig = CONFIG.models[CONFIG.currentModelIndex];
+        showBubble('切换为 ' + modelConfig.label + ' ~', 2000);
+
+        // 更新面板状态
+        const statusEl = document.getElementById('dh-model-status');
+        if (statusEl) statusEl.textContent = modelConfig.label;
+
+        if (!pixiApp) return;
+
+        // 移除旧模型
+        if (live2dModel) {
+            pixiApp.stage.removeChild(live2dModel);
+            live2dModel.destroy({ children: true, texture: true, baseTexture: true });
+            live2dModel = null;
+        }
+
+        // 加载新模型
+        try {
+            live2dModel = await loadModelFromSources(modelConfig.paths);
+            const scale = isMobile ? CONFIG.mobileScale : 1;
+            const h = CONFIG.height * scale;
+            const w = CONFIG.width * scale;
+            const modelScale = (h * 2 * 0.9) / live2dModel.internalModel.height;
+            live2dModel.scale.set(modelScale);
+            live2dModel.anchor.set(0.5, 0.9);
+            live2dModel.x = w;
+            live2dModel.y = h * 2;
+            pixiApp.stage.addChild(live2dModel);
+
+            live2dModel.on('hit', () => onCharacterClick());
+            triggerExpression();
+        } catch (e) {
+            console.error('[DigitalHuman] 切换模型失败:', e);
+            showBubble('切换失败，保持当前形象', 2000);
         }
     }
 
     // ======================== 聊天集成 ========================
     function setupChatIntegration() {
-        // 监听聊天消息容器
         const chatContainer = document.getElementById('chat-container') ||
             document.getElementById('chat-messages') ||
             document.getElementById('messages') ||
@@ -502,20 +700,18 @@
 
         if (!chatContainer) return;
 
-        let lastSpokenText = ''; // 避免重复朗读
+        let lastSpokenText = '';
 
         const observer = new MutationObserver(function (mutations) {
             mutations.forEach(function (mutation) {
                 mutation.addedNodes.forEach(function (node) {
                     if (node.nodeType !== 1) return;
 
-                    // 检测 AI 回复消息（匹配 chat.html 的 .bot-msg 类）
                     const aiMsg = node.matches?.('.bot-msg, .ai-message, .assistant, .bot-message')
                         ? node
                         : node.querySelector?.('.bot-msg, .ai-message, .assistant, .bot-message');
 
                     if (aiMsg) {
-                        // 延迟提取文本（等待 markdown 渲染完成）
                         setTimeout(() => {
                             const text = aiMsg.textContent?.trim();
                             if (text && text.length > 2 && text !== lastSpokenText) {
@@ -532,37 +728,36 @@
         console.log('[DigitalHuman] 聊天集成已启动');
     }
 
-    // ======================== 降级模式（Live2D 加载失败时） ========================
+    // ======================== 降级模式 ========================
     function initFallback() {
-        widgetEl = document.createElement('div');
-        widgetEl.id = 'dh-fallback';
-        widgetEl.style.cssText = `
+        canvasEl = document.createElement('div');
+        canvasEl.id = 'dh-fallback';
+        canvasEl.style.cssText = `
             position: fixed;
-            width: 60px; height: 60px;
-            font-size: 48px;
+            width: 64px; height: 64px;
+            font-size: 52px;
             display: flex; align-items: center; justify-content: center;
             z-index: 9998;
             cursor: pointer;
             user-select: none;
             transition: transform 0.2s;
         `;
-        widgetEl.textContent = '🐱';
-        document.body.appendChild(widgetEl);
+        canvasEl.textContent = '🐱';
+        document.body.appendChild(canvasEl);
 
         position.x = CONFIG.margin;
         position.y = window.innerHeight - 80 - CONFIG.margin;
-        updatePosition();
-        widgetEl.style.left = position.x + 'px';
-        widgetEl.style.top = position.y + 'px';
+        canvasEl.style.left = position.x + 'px';
+        canvasEl.style.top = position.y + 'px';
 
-        widgetEl.addEventListener('click', onCharacterClick);
+        canvasEl.addEventListener('click', onCharacterClick);
 
         state = 'idle';
         lastActionTime = Date.now();
         startBehaviorLoop();
         startTipLoop();
 
-        setTimeout(() => showBubble('你好！我是小智~', 3000), 500);
+        setTimeout(() => showBubble('你好！我是小智~（Live2D加载失败，使用emoji模式）', 3000), 500);
     }
 
     // ======================== 窗口大小变化 ========================
@@ -571,24 +766,17 @@
         const scale = isMobile ? CONFIG.mobileScale : 1;
         const charH = CONFIG.height * scale;
 
-        // 确保角色不会超出屏幕
         if (position.y + charH > window.innerHeight) {
             position.y = window.innerHeight - charH - CONFIG.margin;
             updatePosition();
-            if (widgetEl && widgetEl.id === 'dh-fallback') {
-                widgetEl.style.top = position.y + 'px';
-            }
         }
         if (position.x + CONFIG.width * scale > window.innerWidth) {
             position.x = window.innerWidth - CONFIG.width * scale - CONFIG.margin;
             updatePosition();
-            if (widgetEl && widgetEl.id === 'dh-fallback') {
-                widgetEl.style.left = position.x + 'px';
-            }
         }
     });
 
-    // ======================== 页面可见性（节省性能） ========================
+    // ======================== 页面可见性 ========================
     document.addEventListener('visibilitychange', function () {
         if (document.hidden) {
             if (window.speechSynthesis) speechSynthesis.cancel();
@@ -605,7 +793,14 @@
         stopSpeaking: stopSpeaking,
         switchModel: switchModel,
         triggerExpression: triggerExpression,
-        setTtsEnabled: function (enabled) { CONFIG.ttsEnabled = enabled; },
+        setTtsEnabled: function (enabled) {
+            CONFIG.ttsEnabled = enabled;
+            const status = document.getElementById('dh-tts-status');
+            if (status) {
+                status.textContent = enabled ? '已开启' : '已关闭';
+                status.style.color = enabled ? '#a78bfa' : '#6b7280';
+            }
+        },
         getState: function () { return state; },
         getPosition: function () { return { ...position }; },
     };
@@ -613,9 +808,8 @@
     // ======================== 初始化 ========================
     function init() {
         console.log('[DigitalHuman] 初始化中...');
-        loadLive2D();
-
-        // 延迟集成聊天（等待页面加载完成）
+        createControlPanel();
+        initLive2D();
         setTimeout(setupChatIntegration, 2000);
     }
 
