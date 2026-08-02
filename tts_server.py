@@ -1,26 +1,19 @@
 """
 Qwen3-TTS 本地服务 (FastAPI)
+=========================================
+= 修复 2026-08-02 =
+1. 模型 ID 必须带 12Hz 前缀：Qwen3-TTS-12Hz-0.6B-CustomVoice
+   (之前的  Qwen/Qwen3-TTS-0.6B-CustomVoice 根本不存在)
+2. 国内用户默认从 ModelScope(魔搭) 下载，不走 HuggingFace
+3. 4 个内置音色映射到官方 9 种预置 speaker：
+     默认女声 -> Vivian  温柔女声 -> Serena
+     活力女声 -> Summer  沉稳男声 -> Dylan
+4. generate_custom_voice 走 qwen_tts 官方 API
 = 功能 =
-- POST /tts  : 文本转语音，返回 WAV 音频 blob
-- GET  /speakers : 列出所有内置 + 已克隆的音色
-- POST /clone : 上传参考音频（5-15秒人声），克隆为自定义音色，返回音色名
-- GET  /health : 健康检查（前端自动探测后端地址）
-
-= 使用方法 =
-1. 安装依赖:
-   pip install -r requirements.txt      # 已有 fastapi/uvicorn
-   pip install qwen-tts soundfile numpy transformers accelerate
-
-2. 启动服务（默认端口 8766，与前端 digital-human.js 一致）:
-   python tts_server.py
-
-   # 自定义端口 / 模型大小（0.6B 推荐，1.8B音质更好更慢）
-   python tts_server.py --port 8766 --model-size 0.6B --host 127.0.0.1
-
-3. 部署到 Netlify 时注意：
-   - 本地启动后会自动写 frontend/assets/tts-config.json，前端读取
-   - 若在远程 GPU 服务器运行，则在前端面板点击"当前引擎"手动打开
-   - 把 serverUrl 改成 http://你的服务器IP:端口
+- POST /tts      : 文本转语音 WAV
+- GET  /speakers : 内置 + 克隆音色列表
+- POST /clone    : 上传参考音频克隆音色
+- GET  /health   : 健康检查
 """
 from __future__ import annotations
 
@@ -33,7 +26,7 @@ import time
 import uuid
 import socket
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -42,7 +35,6 @@ from fastapi.responses import StreamingResponse, JSONResponse, Response
 
 app = FastAPI(title="QwenTTS Server")
 
-# CORS：允许前端（任意端口/域）访问
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -51,64 +43,166 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ============================== 全局状态 ==============================
-MODEL = None
-MODEL_SIZE = "0.6B"          # 0.6B | 1.8B
+# ===== 全局状态 =====
+MODEL = None          # 类型: qwen_tts 官方 model 对象
+PROCESSOR = None
+MODEL_SIZE = "0.6B"
+MODEL_ID_CANDIDATES = []        # 运行时填充候选 model_id
 MODEL_LOADED = False
 LOAD_ERROR: Optional[str] = None
 SPEAKERS_DIR: Optional[Path] = None
 REF_DIR: Optional[Path] = None
 FRONTEND_ASSETS: Optional[Path] = None
 
-# 预置音色：speaker_name -> (description, reference_audio_path|None)
-# 如果 qwen-tts 自带 default / female / male 等预设，则直接使用名称
-BUILTIN_SPEAKERS = ["默认女声", "温柔女声", "活力女声", "沉稳男声"]
-cloned_speakers: dict[str, Path] = {}  # name -> 参考音频 wav 路径
+# 4 个内置音色 -> Qwen3-TTS 官方预置 speaker name
+# 官方 CustomVoice 9 种： Vivian, Serena, Summer, Eric, Dylan, Ryan, Lily, Tina, Kevin
+# Vivian = 默认女声   Serena = 温柔女声   Summer = 活力女声   Dylan = 沉稳男声
+BUILTIN_MAP: dict[str, str] = {
+    "默认女声": "Vivian",
+    "温柔女声": "Serena",
+    "活力女声": "Summer",
+    "沉稳男声": "Dylan",
+}
+BUILTIN_SPEAKERS = list(BUILTIN_MAP.keys())
+cloned_speakers: dict[str, Path] = {}   # name -> wav 路径
 
 
-# ============================== 模型懒加载 ==============================
-def load_model(model_size: str):
-    global MODEL, MODEL_LOADED, LOAD_ERROR
+# ==================== 模型加载 ====================
+def _build_candidate_ids(model_size: str, prefer_modelscope: bool) -> list[str]:
+    """按优先级构造候选 model_id 列表"""
+    tag = "12Hz"          # 必须带这个前缀，否则仓库不存在
+    base = f"Qwen3-TTS-{tag}-{model_size}-CustomVoice"
+    cand = []
+    if prefer_modelscope:
+        # ModelScope 写法：  qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice
+        cand.append(f"qwen/{base}")
+        cand.append(f"qwen/{base.lower()}")
+    # HuggingFace 写法：  Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice
+    cand.append(f"Qwen/{base}")
+    cand.append(f"Qwen/{base.lower()}")
+    # 最后兜底：不带 tag 的旧版（大概率不存在，但保留作兼容）
+    cand.append(f"Qwen/Qwen3-TTS-{model_size}-CustomVoice")
+    return cand
+
+
+def load_model(model_size: str, prefer_modelscope: bool = True):
+    global MODEL, PROCESSOR, MODEL_LOADED, LOAD_ERROR
     if MODEL_LOADED:
         return
-    try:
-        print(f"[TTS] 正在加载 Qwen3-TTS-{model_size} (首次需要下载权重到本地 ~/.cache)...", flush=True)
-        t0 = time.time()
-        from qwen_tts import Qwen3TTSModel
-        from transformers import AutoModelForTextToWaveform, AutoProcessor
 
-        # qwen-tts 0.4+ 官方推荐加载方式：Model + Processor
-        model_id = f"Qwen/Qwen3-TTS-{model_size}-CustomVoice"
-        processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
-        model = AutoModelForTextToWaveform.from_pretrained(
-            model_id,
-            trust_remote_code=True,
-            torch_dtype="auto",
-            # 若 GPU 可用则自动用 GPU
-            attn_implementation="sdpa",
-        )
-        # 尝试移动到 GPU
+    # ========= 中国用户：把 HF_ENDPOINT 设为魔搭镜像 =========
+    if prefer_modelscope and not os.environ.get("HF_ENDPOINT"):
+        os.environ["HF_ENDPOINT"] = "https://www.modelscope.cn"
+        print("[TTS] HF_ENDPOINT -> https://www.modelscope.cn (国内镜像更快)", flush=True)
+
+    candidates = _build_candidate_ids(model_size, prefer_modelscope)
+    MODEL_ID_CANDIDATES.extend(candidates)
+
+    print(f"[TTS] 开始加载 Qwen3-TTS-{model_size}，候选 model_id:", flush=True)
+    for c in candidates:
+        print(f"       - {c}", flush=True)
+
+    last_err: Optional[Exception] = None
+    t0 = time.time()
+
+    for mid in candidates:
         try:
-            import torch
-            if torch.cuda.is_available():
-                model = model.cuda()
-                print("[TTS] 使用 GPU (CUDA) 推理", flush=True)
-            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                model = model.to("mps")
-                print("[TTS] 使用 MPS (Apple Silicon) 推理", flush=True)
-            else:
-                print("[TTS] 使用 CPU 推理（较慢，建议有 GPU 的机器运行）", flush=True)
-        except Exception as ex:
-            print(f"[TTS] 设备检测失败，保持默认: {ex}", flush=True)
+            print(f"\n[TTS] 尝试加载: {mid} ...", flush=True)
 
-        model.eval()
-        MODEL = (processor, model)
+            # ---- 方法 1: qwen_tts 官方 SDK ----
+            try:
+                from qwen_tts import Qwen3TTSModel
+                # 官方推荐加载方式
+                model_obj = Qwen3TTSModel.from_pretrained(mid, trust_remote_code=True)
+                MODEL = model_obj
+                MODEL_LOADED = True
+                print(f"[TTS] √ Qwen3TTSModel.from_pretrained('{mid}') 成功", flush=True)
+                break
+            except Exception as e1:
+                print(f"      Qwen3TTSModel 失败: {type(e1).__name__}: {e1}", flush=True)
+                # 继续尝试 AutoProcessor / AutoModelForTextToWaveform
+
+            # ---- 方法 2: transformers 通用 API ----
+            from transformers import AutoModelForTextToWaveform, AutoProcessor
+            proc = AutoProcessor.from_pretrained(mid, trust_remote_code=True)
+            mdl = AutoModelForTextToWaveform.from_pretrained(
+                mid,
+                trust_remote_code=True,
+                torch_dtype="auto",
+            )
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    mdl = mdl.cuda()
+                    print("[TTS] 使用 GPU (CUDA)", flush=True)
+                elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                    mdl = mdl.to("mps")
+                    print("[TTS] 使用 MPS (Apple Silicon)", flush=True)
+                else:
+                    print("[TTS] 使用 CPU 推理", flush=True)
+            except Exception:
+                pass
+            mdl.eval()
+            PROCESSOR = proc
+            MODEL = mdl
+            MODEL_LOADED = True
+            print(f"[TTS] √ transformers AutoModel 加载成功: {mid}", flush=True)
+            break
+
+        except Exception as ex:
+            last_err = ex
+            msg = f"{type(ex).__name__}: {ex}"
+            print(f"      × 失败: {msg[:200]}", flush=True)
+            continue
+
+    if not MODEL_LOADED:
+        if last_err:
+            LOAD_ERROR = f"{type(last_err).__name__}: {last_err}"
+        else:
+            LOAD_ERROR = "所有候选 model_id 加载都失败"
+        print(f"\n[TTS] 模型加载彻底失败: {LOAD_ERROR}", flush=True)
+        print("[TTS] 建议操作:", flush=True)
+        print("      1. 手动从 https://www.modelscope.cn/models/qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice 下载", flush=True)
+        print("      2. 解压到本地目录，启动时加 --model-dir D:/path/to/model", flush=True)
+        return
+
+    print(f"[TTS] 总耗时 {time.time()-t0:.1f}s\n", flush=True)
+
+
+def load_model_from_local(local_dir: str):
+    """从本地文件夹直接加载（手动下载后使用）"""
+    global MODEL, PROCESSOR, MODEL_LOADED, LOAD_ERROR
+    if MODEL_LOADED:
+        return
+    t0 = time.time()
+    print(f"[TTS] 从本地目录加载: {local_dir}", flush=True)
+    try:
+        from qwen_tts import Qwen3TTSModel
+        MODEL = Qwen3TTSModel.from_pretrained(local_dir, trust_remote_code=True)
         MODEL_LOADED = True
-        print(f"[TTS] 模型加载完成，耗时 {time.time() - t0:.1f}s", flush=True)
-    except Exception as ex:
-        LOAD_ERROR = f"{type(ex).__name__}: {ex}"
-        print(f"[TTS] 模型加载失败: {LOAD_ERROR}", flush=True)
-        # 不要直接退出——保留 /health 和 /clone 的基础能力，方便用户排错
+    except Exception as e1:
+        try:
+            from transformers import AutoModelForTextToWaveform, AutoProcessor
+            PROCESSOR = AutoProcessor.from_pretrained(local_dir, trust_remote_code=True)
+            mdl = AutoModelForTextToWaveform.from_pretrained(
+                local_dir, trust_remote_code=True, torch_dtype="auto"
+            )
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    mdl = mdl.cuda()
+                elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                    mdl = mdl.to("mps")
+            except Exception:
+                pass
+            mdl.eval()
+            MODEL = mdl
+            MODEL_LOADED = True
+        except Exception as e2:
+            LOAD_ERROR = f"本地加载失败(官方): {e1}; (transformers): {e2}"
+            print(f"[TTS] {LOAD_ERROR}", flush=True)
+            return
+    print(f"[TTS] 本地目录加载成功，耗时 {time.time()-t0:.1f}s", flush=True)
 
 
 def ensure_loaded():
@@ -116,14 +210,13 @@ def ensure_loaded():
         load_model(MODEL_SIZE)
     if not MODEL_LOADED:
         raise HTTPException(status_code=500, detail=f"TTS 模型未加载: {LOAD_ERROR}")
-    return MODEL
+    return MODEL, PROCESSOR
 
 
-# ============================== 工具函数 ==============================
+# ==================== 工具函数 ====================
 def save_wav_bytes(audio: np.ndarray, sr: int) -> bytes:
     import soundfile as sf
     buf = io.BytesIO()
-    # 归一化到 int16
     audio = np.clip(audio, -1.0, 1.0)
     audio_i16 = (audio * 32767.0).astype(np.int16)
     sf.write(buf, audio_i16, sr, format="WAV", subtype="PCM_16")
@@ -131,7 +224,6 @@ def save_wav_bytes(audio: np.ndarray, sr: int) -> bytes:
 
 
 def text_preprocess(text: str) -> str:
-    """轻量文本预处理：只移除控制字符，不过滤任何可打印字符（避免破坏tokenizer）"""
     import unicodedata
     t = unicodedata.normalize("NFKC", text or "")
     t = "".join(ch for ch in t if ord(ch) >= 32 or ch in "\n\r\t")
@@ -154,7 +246,19 @@ def get_free_port(prefer: int = 8766) -> int:
         return free
 
 
-# ============================== API 路由 ==============================
+def detect_language(text: str) -> str:
+    """简单语言检测 -> 'chinese'/'english'/'japanese'... 给 generate_custom_voice 用"""
+    import re
+    if re.search(r"[\u4e00-\u9fff]", text):
+        return "chinese"
+    if re.search(r"[\u3040-\u30ff]", text):
+        return "japanese"
+    if re.search(r"[\uac00-\ud7af]", text):
+        return "korean"
+    return "english"
+
+
+# ==================== API ====================
 @app.get("/health")
 def health():
     return {
@@ -162,12 +266,13 @@ def health():
         "model_loaded": MODEL_LOADED,
         "model_size": MODEL_SIZE,
         "load_error": LOAD_ERROR,
+        "candidate_model_ids": MODEL_ID_CANDIDATES,
         "speakers": list_speakers(),
     }
 
 
 def list_speakers() -> list[str]:
-    return list(BUILTIN_SPEAKERS) + list(cloned_speakers.keys())
+    return BUILTIN_SPEAKERS + list(cloned_speakers.keys())
 
 
 @app.get("/speakers")
@@ -180,32 +285,25 @@ async def clone_voice(
     audio: UploadFile = File(...),
     speaker_name: str = Form(default=""),
 ):
-    """
-    上传一段 5-15 秒的人声 wav/mp3/flac，克隆音色。
-    返回 speaker_name （已注册到 speakers 列表）。
-    """
     if not REF_DIR:
-        raise HTTPException(status_code=500, detail="REF_DIR not set (init failed)")
+        raise HTTPException(status_code=500, detail="REF_DIR not set")
     try:
         content = await audio.read()
         if len(content) < 10_000:
-            raise HTTPException(status_code=400, detail="音频太短，至少需要几百毫秒的音频")
+            raise HTTPException(status_code=400, detail="音频太短")
         ext = os.path.splitext(audio.filename or "audio.wav")[1].lower() or ".wav"
-        # 解析名称
-        name = speaker_name.strip() or audio.filename or "我的音色"
+        name = speaker_name.strip() or (audio.filename or "我的音色").rsplit(".", 1)[0]
         name = "".join(ch for ch in name if ch.isalnum() or ch in "_- \u4e00-\u9fff").strip()
         if not name:
             name = f"clone_{uuid.uuid4().hex[:6]}"
-        # 去重：同名自动加后缀
         base, i = name, 0
         while name in cloned_speakers:
             i += 1
             name = f"{base}_{i}"
-        # 保存原始文件
         save_path = REF_DIR / f"{name}_{uuid.uuid4().hex[:6]}{ext}"
         save_path.write_bytes(content)
         cloned_speakers[name] = save_path
-        print(f"[TTS] 已克隆音色: {name} -> {save_path}", flush=True)
+        print(f"[TTS] 音色克隆: {name} -> {save_path.name}", flush=True)
         return {"ok": True, "speaker": name, "saved_path": str(save_path)}
     except HTTPException:
         raise
@@ -213,81 +311,110 @@ async def clone_voice(
         raise HTTPException(status_code=500, detail=f"{type(ex).__name__}: {ex}")
 
 
-def _synthesize(text: str, speaker: Optional[str]) -> tuple[np.ndarray, int]:
-    """内部调用 qwen-tts 生成音频"""
-    processor, model = ensure_loaded()
-    import torch
+def _synthesize(text: str, speaker_label: Optional[str]) -> Tuple[np.ndarray, int]:
+    """核心合成函数：
+    - 如果 speaker_label 是克隆音色 -> few-shot 参考音频 (voice 参数)
+    - 否则 -> 官方预置 speaker (Vivian/Serena/Summer/Dylan 等)
+    """
+    ensure_loaded()
 
-    # 确定参考音频：若 speaker 是克隆音色 -> 用它的 ref audio；否则用 qwen-tts 内置的默认"女声音色"音频
-    ref_audio_path: Optional[str] = None
-    if speaker and speaker in cloned_speakers:
-        ref_audio_path = str(cloned_speakers[speaker])
+    # 1) 判断是否是克隆音色
+    is_cloned = bool(speaker_label and speaker_label in cloned_speakers)
+    ref_audio: Optional[str] = str(cloned_speakers[speaker_label]) if is_cloned else None
 
-    try:
-        # 新版 qwen-tts (0.4+) 用法：processor + model.generate
-        inputs = processor(
-            text=[text],
-            voice=ref_audio_path,  # 传 ref audio 路径即可做 few-shot 音色克隆
-            return_tensors="pt",
-            sampling_rate=24000,
-        )
-        # 移到模型所在设备
+    # 2) 若是内置音色 -> 映射到官方 speaker 英文名
+    builtin_speaker: Optional[str] = None
+    if not is_cloned and speaker_label:
+        builtin_speaker = BUILTIN_MAP.get(speaker_label, BUILTIN_MAP["默认女声"])
+
+    lang = detect_language(text)
+
+    # ========== 方法 A：直接调用官方 model.generate_custom_voice ==========
+    if hasattr(MODEL, "generate_custom_voice"):
         try:
-            dev = next(model.parameters()).device
-            for k in list(inputs.keys()):
-                if hasattr(inputs[k], "to"):
-                    inputs[k] = inputs[k].to(dev)
-        except Exception:
-            pass
-        with torch.no_grad():
-            out = model.generate(**inputs)
-        # generate 返回的通常是 [batch, samples]，取值，24kHz
-        if isinstance(out, tuple):
-            audio = out[0]
-        else:
-            audio = out
-        audio_np = audio[0].float().cpu().numpy()
-        # 若形状是 [channels, samples] 取第一声道
-        if audio_np.ndim > 1:
-            audio_np = audio_np[0]
-        return audio_np, 24000
-    except TypeError as e:
-        # 若 processor 参数不匹配，尝试直接调 model 自定义接口
-        try:
-            # 回退路径：调用 generate_custom_voice 或更简单的 generate
+            import torch
             with torch.no_grad():
-                if ref_audio_path and hasattr(model, "generate_custom_voice"):
-                    audio = model.generate_custom_voice(text, ref_audio_path)
+                if is_cloned:
+                    # few-shot 克隆音色
+                    out = MODEL.generate_custom_voice(
+                        text=text,
+                        language=lang,
+                        voice=ref_audio,   # 官方用 voice 传参考音频路径
+                    )
                 else:
-                    audio = model.generate(text)
-            if isinstance(audio, tuple):
-                audio = audio[0]
-            audio_np = audio[0].float().cpu().numpy()
+                    # 官方预置 speaker
+                    out = MODEL.generate_custom_voice(
+                        text=text,
+                        language=lang,
+                        speaker=builtin_speaker or "Vivian",
+                    )
+            if isinstance(out, tuple):
+                audio = out[0]
+                sr = out[1] if len(out) > 1 else 24000
+            else:
+                audio = out
+                sr = 24000
+            # 取第一个样本
+            try:
+                audio_np = audio[0].float().cpu().numpy()
+            except Exception:
+                audio_np = np.array(audio, dtype=np.float32)
             if audio_np.ndim > 1:
                 audio_np = audio_np[0]
-            return audio_np, 24000
-        except Exception as e2:
-            raise RuntimeError(f"primary path: {e}; fallback path: {e2}")
+            return audio_np, int(sr)
+        except Exception as ea:
+            print(f"[TTS] generate_custom_voice 异常: {ea}", flush=True)
+            # 继续尝试方法 B
+
+    # ========== 方法 B：processor + model.generate ==========
+    if PROCESSOR is not None:
+        try:
+            import torch
+            kwargs = dict(
+                text=[text],
+                return_tensors="pt",
+                sampling_rate=24000,
+            )
+            if is_cloned:
+                kwargs["voice"] = ref_audio
+            elif builtin_speaker:
+                kwargs["speaker"] = builtin_speaker
+            inputs = PROCESSOR(**kwargs)
+            try:
+                dev = next(MODEL.parameters()).device
+                for k in list(inputs.keys()):
+                    if hasattr(inputs[k], "to"):
+                        inputs[k] = inputs[k].to(dev)
+            except Exception:
+                pass
+            with torch.no_grad():
+                out = MODEL.generate(**inputs)
+            if isinstance(out, tuple):
+                audio = out[0]
+                sr = out[1] if len(out) > 1 else 24000
+            else:
+                audio = out
+                sr = 24000
+            try:
+                audio_np = audio[0].float().cpu().numpy()
+            except Exception:
+                audio_np = np.array(audio, dtype=np.float32)
+            if audio_np.ndim > 1:
+                audio_np = audio_np[0]
+            return audio_np, int(sr)
+        except Exception as eb:
+            raise RuntimeError(f"Both methods failed. A: {ea}; B: {eb}") from eb
+
+    raise RuntimeError(f"没有可用的合成方法，model={type(MODEL).__name__}")
 
 
 @app.post("/tts")
-async def tts_endpoint(
-    body: dict,
-):
-    """
-    body:
-      text: 要合成的文本
-      speaker: 可选，音色名（内置或克隆名）
-      stream_audio: 可选 bool
-    返回 WAV 音频 (audio/wav)
-    """
+async def tts_endpoint(body: dict):
     text_raw = (body or {}).get("text") or ""
     speaker = (body or {}).get("speaker") or BUILTIN_SPEAKERS[0]
     text = text_preprocess(text_raw)
     if not text:
         raise HTTPException(status_code=400, detail="文本为空")
-
-    # 截断到合理长度，防止推理过久
     if len(text) > 500:
         text = text[:500] + "……"
 
@@ -295,8 +422,11 @@ async def tts_endpoint(
     audio, sr = _synthesize(text, speaker)
     wav_bytes = save_wav_bytes(audio, sr)
     ms = int((time.time() - t0) * 1000)
-    print(f"[TTS] speaker={speaker} text_len={len(text)} size_kb={len(wav_bytes)//1024} latency={ms}ms", flush=True)
-
+    print(
+        f"[TTS] speaker={speaker} text_len={len(text)} "
+        f"size_kb={len(wav_bytes)//1024} latency={ms}ms",
+        flush=True,
+    )
     return Response(
         content=wav_bytes,
         media_type="audio/wav",
@@ -309,10 +439,6 @@ async def tts_endpoint(
 
 @app.post("/tts_stream")
 async def tts_stream(body: dict):
-    """
-    流式 TTS：分句 + 边生成边 chunked transfer
-    （若模型不支持流式生成，则至少实现 chunked 传输降低首包延迟感知）
-    """
     import re
     text_raw = (body or {}).get("text") or ""
     speaker = (body or {}).get("speaker") or BUILTIN_SPEAKERS[0]
@@ -320,36 +446,24 @@ async def tts_stream(body: dict):
     if not text:
         raise HTTPException(status_code=400, detail="文本为空")
 
-    # 简单分句
     parts = re.split(r"(?<=[。！？\.!?\n])", text)
-    parts = [p.strip() for p in parts if p.strip()]
-    if not parts:
-        parts = [text]
+    parts = [p.strip() for p in parts if p.strip()] or [text]
 
     def gen():
-        # 先输出 WAV 头（占位，真实长度不准确但浏览器通常仍可播放）
-        first_chunk = True
-        total_len = 0
-        header_placeholders = b""
+        first = True
         for part in parts:
             audio, sr = _synthesize(part, speaker)
             data = save_wav_bytes(audio, sr)
-            if first_chunk:
-                header_placeholders = data[:44]  # 标准 WAV header
+            if first:
                 yield data
-                total_len += len(data)
-                first_chunk = False
+                first = False
             else:
-                # 去掉后续 chunk 的 wav header，直接拼接 PCM data（这样拼接的 wav 时长只按第一段算）
-                # 简化：为保证浏览器都能播，每个 chunk 都是独立 WAV 包在 Multipart 中代价太高
-                # 改为每句独立 WAV，由前端排队播放，所以这里直接整段返回
                 yield data[44:]
-                total_len += len(data) - 44
 
     return StreamingResponse(gen(), media_type="audio/wav")
 
 
-# ============================== 启动入口 ==============================
+# ==================== 启动 ====================
 def write_frontend_config(port: int, host: str, speaker: str):
     if not FRONTEND_ASSETS or not FRONTEND_ASSETS.exists():
         return
@@ -357,29 +471,31 @@ def write_frontend_config(port: int, host: str, speaker: str):
         "serverUrl": f"http://{host}:{port}",
         "speaker": speaker,
         "model_size": MODEL_SIZE,
+        "builtin_speaker_map": BUILTIN_MAP,
         "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     out = FRONTEND_ASSETS / "tts-config.json"
     try:
         out.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"[TTS] 已写入前端配置: {out}", flush=True)
+        print(f"[TTS] 前端配置 -> {out}", flush=True)
     except Exception as ex:
         print(f"[TTS] 写入前端配置失败: {ex}", flush=True)
 
 
 def main():
     global MODEL_SIZE, SPEAKERS_DIR, REF_DIR, FRONTEND_ASSETS
-    parser = argparse.ArgumentParser(description="Qwen3-TTS FastAPI Server")
-    parser.add_argument("--port", type=int, default=0, help="端口，0=自动选择，默认优先 8766")
-    parser.add_argument("--host", type=str, default="127.0.0.1", help="绑定地址；局域网访问请写 0.0.0.0")
-    parser.add_argument("--model-size", type=str, default="0.6B", choices=["0.6B", "1.8B"], help="模型大小")
-    parser.add_argument("--lazy", action="store_true", help="懒加载：第一次 /tts 请求时才载入模型")
+    parser = argparse.ArgumentParser(description="Qwen3-TTS FastAPI Server (修复版)")
+    parser.add_argument("--port", type=int, default=0)
+    parser.add_argument("--host", type=str, default="127.0.0.1")
+    parser.add_argument("--model-size", type=str, default="0.6B", choices=["0.6B", "1.8B"])
+    parser.add_argument("--lazy", action="store_true", help="首次 TTS 请求才加载模型")
+    parser.add_argument("--no-modelscope", action="store_true", help="禁用 ModelScope 镜像（纯 HF）")
+    parser.add_argument("--model-dir", type=str, default="", help="本地已下载的模型目录（手动下好后用）")
     args = parser.parse_args()
 
     MODEL_SIZE = args.model_size
     port = args.port if args.port else get_free_port(8766)
 
-    # 目录初始化
     base = Path(__file__).resolve().parent
     data_dir = base / "tts_data"
     data_dir.mkdir(exist_ok=True)
@@ -390,19 +506,19 @@ def main():
     FRONTEND_ASSETS = base / "frontend" / "assets"
     FRONTEND_ASSETS.mkdir(parents=True, exist_ok=True)
 
-    # 启动时不阻塞预加载（除非 --lazy）
-    if not args.lazy:
-        load_model(MODEL_SIZE)
+    # 有本地目录就直接加载本地
+    if args.model_dir:
+        load_model_from_local(args.model_dir)
+    elif not args.lazy:
+        load_model(MODEL_SIZE, prefer_modelscope=not args.no_modelscope)
 
-    # 提前写配置，前端才能探测到
     write_frontend_config(port, args.host, BUILTIN_SPEAKERS[0])
 
-    # 首次 /tts 才加载模型的情况
     if args.lazy:
-        print("[TTS] 已启用 --lazy ：第一次请求 /tts 时才加载模型，节省内存", flush=True)
+        print("[TTS] --lazy 模式：首次 /tts 请求才加载模型", flush=True)
 
-    print(f"[TTS] 服务启动: http://{args.host}:{port}", flush=True)
-    print(f"[TTS] 健康检查: http://127.0.0.1:{port}/health", flush=True)
+    print(f"[TTS] 服务: http://{args.host}:{port}", flush=True)
+    print(f"[TTS] 健康: http://127.0.0.1:{port}/health", flush=True)
 
     import uvicorn
     uvicorn.run(app, host=args.host, port=port, log_level="info")

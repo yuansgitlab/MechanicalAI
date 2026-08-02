@@ -61,6 +61,71 @@
             '探索知识，从提问开始~',
         ],
 
+        // ============ 引导巡航：目标元素 + 话术 + 到达后动作 ============
+        cruiseStops: [
+            {
+                name: '开始对话',
+                // CSS 选择器顺序（优先找 chat 页面的，再找首页的）
+                selectors: [
+                    '#start-chat-btn',
+                    'a[href="chat.html"]',
+                    'button:has-text("开始对话")',
+                ],
+                // 停靠位置 offset（相对元素）：'bottom-left' | 'bottom-right' | 'top-right' | 'top-left'
+                dock: 'bottom-left',
+                lines: [
+                    '嗨嗨～点点这里，开始使用吧！',
+                    '点这个按钮，就可以和我说话啦～',
+                ],
+                // 到达后的动作：wave(挥手) | point(指) | jump(跳) | bow(鞠躬)
+                gesture: 'point',
+                // 停留后是否自动点下一个
+                autoNext: true,
+            },
+            {
+                name: '学习规划',
+                selectors: [
+                    'a[href="study-plans.html"]',
+                    'a:has-text("学习规划")',
+                ],
+                dock: 'top-right',
+                lines: [
+                    '我还会帮你制定专属学习计划哦～',
+                    '不知道怎么学？点这里看看吧！',
+                ],
+                gesture: 'wave',
+                autoNext: true,
+            },
+            {
+                name: '个人题库',
+                selectors: [
+                    'a[href="question-bank.html"]',
+                    'a:has-text("个人题库")',
+                ],
+                dock: 'top-right',
+                lines: [
+                    '做错的、经典的题目都可以存到这里～',
+                    '随时拿出来复习，期末不慌！',
+                ],
+                gesture: 'point',
+                autoNext: true,
+            },
+            {
+                name: '讨论区',
+                selectors: [
+                    'a[href="discuss.html"]',
+                    'a:has-text("讨论")',
+                ],
+                dock: 'top-right',
+                lines: [
+                    '有问题也可以发到讨论区和大家交流～',
+                    '点这里看大家都在讨论什么！',
+                ],
+                gesture: 'wave',
+                autoNext: false,   // 最后一站不自动下一个
+            },
+        ],
+
         ttsBlacklist: [
             /AI正在思考/,
             /AI思考中/,
@@ -248,6 +313,9 @@
                 triggerExpression();
             }, 600);
 
+            // 模型就绪 3.5s 后开始引导巡航
+            startCruise(3500);
+
             console.log('[DigitalHuman] 数字人已就绪，总耗时', Math.round(performance.now() - t0), 'ms');
         } catch (e) {
             console.error('[DigitalHuman] Live2D 初始化失败:', e);
@@ -324,6 +392,279 @@
             ty = window.innerHeight * 0.3 + Math.random() * Math.max(0, window.innerHeight * 0.4 - ch);
         }
         targetPos = { x: tx, y: ty };
+    }
+
+    // ============ 引导巡航逻辑 ============
+    let cruiseState = {
+        active: false,
+        currentStopIdx: -1,
+        targetEl: null,
+        highlightedEl: null,
+        waitingForIdle: false,
+    };
+
+    // 找元素：支持 :has-text(xxx) 伪类的简易实现
+    function findCruiseEl(selectors) {
+        for (let i = 0; i < selectors.length; i++) {
+            let sel = selectors[i];
+            // 支持 :has-text("xxx") 简写
+            const m = sel.match(/^([\s\S]*?):has-text\("?([^"]+)"?\)$/);
+            try {
+                if (m) {
+                    const baseSel = m[1] || '*';
+                    const txt = m[2].trim();
+                    const nodes = document.querySelectorAll(baseSel);
+                    for (let j = 0; j < nodes.length; j++) {
+                        if ((nodes[j].textContent || '').indexOf(txt) >= 0) {
+                            const r = nodes[j].getBoundingClientRect();
+                            if (r.width > 0 && r.height > 0) return nodes[j];
+                        }
+                    }
+                } else {
+                    const el = document.querySelector(sel);
+                    if (el) {
+                        const r = el.getBoundingClientRect();
+                        if (r.width > 0 && r.height > 0) return el;
+                    }
+                }
+            } catch (e) { /* bad selector, skip */ }
+        }
+        return null;
+    }
+
+    // 根据 dock 位置 + 元素 rect，计算角色应该站的 (x, y)
+    function calcDockPosition(el, dock) {
+        const sc = isMobile ? CONFIG.mobileScale : 1;
+        const cw = CONFIG.width * sc;
+        const ch = CONFIG.height * sc;
+        const r = el.getBoundingClientRect();
+        // 元素在视口中的绝对坐标
+        const ex = r.left + window.scrollX;
+        const ey = r.top + window.scrollY;
+        const ew = r.width;
+        const eh = r.height;
+        const pad = 12;
+        let tx, ty;
+        switch (dock) {
+            case 'bottom-left':
+                tx = ex - cw - pad;
+                ty = ey + eh - ch;
+                break;
+            case 'bottom-right':
+                tx = ex + ew + pad;
+                ty = ey + eh - ch;
+                break;
+            case 'top-right':
+                tx = ex + ew + pad;
+                ty = ey - ch - pad;
+                break;
+            case 'top-left':
+            default:
+                tx = ex - cw - pad;
+                ty = ey - ch - pad;
+                break;
+        }
+        // 夹在可视区域内
+        tx = Math.max(CONFIG.margin, Math.min(tx, window.innerWidth - cw - CONFIG.margin));
+        ty = Math.max(CONFIG.margin, Math.min(ty, window.innerHeight - ch - CONFIG.margin));
+        return { x: tx, y: ty };
+    }
+
+    // 高亮目标元素（阴影 + 脉冲动画，不侵入页面）
+    function highlightTarget(el, on) {
+        if (!el) return;
+        const key = '__dh_hl_orig';
+        if (on) {
+            if (cruiseState.highlightedEl && cruiseState.highlightedEl !== el) {
+                highlightTarget(cruiseState.highlightedEl, false);
+            }
+            if (!el[key]) {
+                el[key] = el.style.cssText;
+            }
+            el.style.cssText = (el[key] || '') +
+                'box-shadow:0 0 0 3px #f472b6,0 0 20px 4px rgba(244,114,182,0.5)!important;' +
+                'border-radius:inherit!important;transition:box-shadow .3s!important;';
+            try {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            } catch (e) { /* */ }
+            cruiseState.highlightedEl = el;
+        } else {
+            if (el[key]) {
+                el.style.cssText = el[key];
+                delete el[key];
+            }
+            if (cruiseState.highlightedEl === el) {
+                cruiseState.highlightedEl = null;
+            }
+        }
+    }
+
+    // 角色 gesture：用 Live2D 参数做一个"指向"或"挥手"的动作
+    function doGesture(gestureName) {
+        if (!live2dModel) return;
+        try {
+            const cm = live2dModel.internalModel.coreModel;
+            const t0 = performance.now();
+            const duration = 1800;
+            let raf;
+            const tick = function () {
+                const t = performance.now() - t0;
+                if (t > duration) {
+                    // 复位
+                    try {
+                        cm.setParameterValueById('PARAM_ANGLE_X', 0);
+                        cm.setParameterValueById('PARAM_ANGLE_Y', 0);
+                        cm.setParameterValueById('PARAM_BODY_ANGLE_X', 0);
+                        cm.setParameterValueById('PARAM_ARM_L_ANGLE', 0);
+                        cm.setParameterValueById('PARAM_ARM_R_ANGLE', 0);
+                        cm.setParameterValueById('PARAM_HAND_OPEN_L', 1);
+                        cm.setParameterValueById('PARAM_HAND_OPEN_R', 1);
+                    } catch (e) { /* */ }
+                    return;
+                }
+                const p = Math.min(1, t / duration);
+                try {
+                    if (gestureName === 'point') {
+                        // 指向：右胳膊抬起，身体稍微前倾
+                        const swing = Math.sin(t / 120) * 5;
+                        cm.setParameterValueById('PARAM_ARM_R_ANGLE', -80 + swing);   // 抬右臂
+                        cm.setParameterValueById('PARAM_ANGLE_Y', -12);               // 抬头
+                        cm.setParameterValueById('PARAM_BODY_ANGLE_X', 4);            // 身体前倾
+                        cm.setParameterValueById('PARAM_HAND_OPEN_R', 0.3);           // 手指(合拢=指)
+                    } else if (gestureName === 'wave') {
+                        // 挥手：胳膊大幅摆动
+                        const swing = Math.sin(t / 160) * 30;
+                        cm.setParameterValueById('PARAM_ARM_R_ANGLE', -60 + swing);
+                        cm.setParameterValueById('PARAM_BODY_ANGLE_X', swing * 0.2);
+                        cm.setParameterValueById('PARAM_ANGLE_X', swing * 0.15);
+                        cm.setParameterValueById('PARAM_HAND_OPEN_R', 1);
+                    } else if (gestureName === 'jump') {
+                        // 跳动：用 canvas 容器 translateY（Live2D 参数里没有 jump）
+                        const el = canvasEl || fallbackEl;
+                        if (el) {
+                            const up = Math.sin(p * Math.PI) * 16;
+                            el.style.transform = (el.__dh_flip || '') +
+                                ' translateY(-' + up + 'px)';
+                        }
+                    } else if (gestureName === 'bow') {
+                        // 鞠躬：身体大幅前倾 + 低头
+                        const bend = Math.sin(p * Math.PI) * 18;
+                        cm.setParameterValueById('PARAM_BODY_ANGLE_X', bend);
+                        cm.setParameterValueById('PARAM_ANGLE_Y', bend * 0.7);
+                    }
+                } catch (e) { /* 有些模型没这些参数，忽略 */ }
+                raf = requestAnimationFrame(tick);
+            };
+            tick();
+        } catch (e) { /* */ }
+    }
+
+    // 开始某一站的巡航
+    function runCruiseStop(idx) {
+        const stops = CONFIG.cruiseStops;
+        if (idx < 0 || idx >= stops.length) {
+            endCruise();
+            return;
+        }
+        cruiseState.currentStopIdx = idx;
+        const stop = stops[idx];
+        const el = findCruiseEl(stop.selectors);
+        if (!el) {
+            // 当前页面没这个元素（比如在 about.html 找不到"开始对话"按钮）→ 跳过
+            console.log('[Cruise] 跳过站点(元素不存在):', stop.name);
+            if (stop.autoNext) {
+                setTimeout(function () { runCruiseStop(idx + 1); }, 200);
+            } else {
+                endCruise();
+            }
+            return;
+        }
+        cruiseState.targetEl = el;
+        highlightTarget(el, true);
+        // 计算停靠位置
+        const pos = calcDockPosition(el, stop.dock);
+        // 先记录朝向
+        const startX = position.x;
+        state = 'cruise_walk';
+        targetPos = pos;
+        // 等走到位置，再说话 + 做动作
+        const waitArrive = setInterval(function () {
+            if (!cruiseState.active) { clearInterval(waitArrive); return; }
+            const dx = targetPos.x - position.x;
+            const dy = targetPos.y - position.y;
+            if (Math.abs(dx) < 6 && Math.abs(dy) < 6) {
+                clearInterval(waitArrive);
+                state = 'cruise_talk';
+                targetPos = null;
+                // 朝向目标元素
+                const flipStr = (pos.x + (CONFIG.width * (isMobile ? CONFIG.mobileScale : 1)) / 2) <
+                    (el.getBoundingClientRect().left + el.getBoundingClientRect().width / 2)
+                    ? 'scaleX(1)' : 'scaleX(-1)';
+                const el2 = canvasEl || fallbackEl;
+                if (el2) {
+                    el2.__dh_flip = flipStr;
+                    el2.style.transform = flipStr;
+                }
+                // 说话（说 stop.lines 中随机一句）
+                const line = stop.lines[Math.floor(Math.random() * stop.lines.length)];
+                doGesture(stop.gesture);
+                showBubble(line, 5000);
+                setTimeout(function () { speak(line); }, 300);
+                // 等说完/看完 → 下一站
+                const holdMs = 4500;
+                setTimeout(function () {
+                    if (cruiseState.highlightedEl === el) highlightTarget(el, false);
+                    if (stop.autoNext) {
+                        runCruiseStop(idx + 1);
+                    } else {
+                        endCruise();
+                    }
+                }, holdMs);
+            }
+        }, 60);
+    }
+
+    function endCruise() {
+        cruiseState.active = false;
+        cruiseState.currentStopIdx = -1;
+        if (cruiseState.highlightedEl) {
+            highlightTarget(cruiseState.highlightedEl, false);
+        }
+        cruiseState.targetEl = null;
+        state = 'idle';
+        lastActionTime = Date.now();
+        console.log('[Cruise] 引导巡航结束');
+    }
+
+    // 启动引导巡航（页面加载完成、模型就绪后调）
+    function startCruise(delayMs) {
+        delayMs = delayMs || 3500;
+        const key = 'dh_last_cruise_time';
+        try {
+            const last = parseInt(localStorage.getItem(key) || '0', 10);
+            // 15 分钟内不重复引导（同一会话友好）
+            if (last && Date.now() - last < 15 * 60 * 1000) {
+                console.log('[Cruise] 距上次引导<15分钟，跳过');
+                return;
+            }
+        } catch (e) { /* */ }
+        setTimeout(function () {
+            if (cruiseState.active) return;
+            cruiseState.active = true;
+            try { localStorage.setItem(key, String(Date.now())); } catch (e) { /* */ }
+            console.log('[Cruise] 开始引导巡航');
+            runCruiseStop(0);
+        }, delayMs);
+    }
+
+    // 手动触发引导（用户面板里的"带我逛一圈"按钮）
+    function triggerCruiseNow() {
+        if (cruiseState.active) {
+            endCruise();
+            return;
+        }
+        cruiseState.active = true;
+        runCruiseStop(0);
     }
 
     function initFallbackBehavior() {
@@ -704,6 +1045,11 @@
                     '<span class="dh-item-icon">\uD83C\uDFA4</span>' +
                     '<span class="dh-item-label">测试语音</span>' +
                 '</button>' +
+                '<button class="dh-panel-item" id="dh-cruise">' +
+                    '<span class="dh-item-icon">\uD83E\uDDED</span>' +
+                    '<span class="dh-item-label">带我逛一圈</span>' +
+                    '<span class="dh-item-status" id="dh-cruise-status">引导模式</span>' +
+                '</button>' +
                 '<button class="dh-panel-item" id="dh-switch-model">' +
                     '<span class="dh-item-icon">\uD83D\uDC4B</span>' +
                     '<span class="dh-item-label">打招呼</span>' +
@@ -877,6 +1223,37 @@
             updateEngineStatusUI();
         });
 
+        // 带我逛一圈：手动触发引导巡航（再点一次取消）
+        document.getElementById('dh-cruise').addEventListener('click', function () {
+            const st = document.getElementById('dh-cruise-status');
+            if (cruiseState.active) {
+                endCruise();
+                if (st) { st.textContent = '引导模式'; st.style.color = '#a78bfa'; }
+                showBubble('好的，结束啦～有需要随时点我哦', 2500);
+            } else {
+                cruiseState.active = true;
+                if (st) { st.textContent = '巡航中...'; st.style.color = '#34d399'; }
+                runCruiseStop(0);
+            }
+        });
+
+        // 监听 cruise 状态变化（用于更新UI文字）
+        setInterval(function () {
+            const st = document.getElementById('dh-cruise-status');
+            if (!st) return;
+            if (cruiseState.active) {
+                if (st.textContent !== '巡航中...') {
+                    st.textContent = '巡航中...';
+                    st.style.color = '#34d399';
+                }
+            } else {
+                if (st.textContent !== '引导模式') {
+                    st.textContent = '引导模式';
+                    st.style.color = '#a78bfa';
+                }
+            }
+        }, 500);
+
         updateEngineStatusUI();
     }
 
@@ -990,6 +1367,9 @@
         showBubble: showBubble,
         stopSpeaking: stopSpeaking,
         triggerExpression: triggerExpression,
+        triggerCruise: triggerCruiseNow,
+        startCruise: startCruise,
+        endCruise: endCruise,
         setTtsEnabled: function (enabled) {
             CONFIG.ttsEnabled = enabled;
             const s = document.getElementById('dh-tts-status');
