@@ -47,6 +47,11 @@
             lastAbort: null,
         },
 
+        // 用户手动设置的公网 TTS 地址（从 localStorage 读取，内网穿透用）
+        manualTtsUrl: (function () {
+            try { return localStorage.getItem('dh_manual_tts_url') || ''; } catch (e) { return ''; }
+        })(),
+
         tips: [
             '有问题随时问我哦~',
             '点击导航栏开始对话！',
@@ -443,6 +448,22 @@
     }
 
     async function loadTtsConfig() {
+        // 1. 最高优先：用户手动设置的公网地址（内网穿透）
+        if (CONFIG.manualTtsUrl) {
+            try {
+                const r = await fetch(CONFIG.manualTtsUrl + '/health', { cache: 'no-store' });
+                if (r.ok) {
+                    CONFIG.qwenTts.serverUrl = CONFIG.manualTtsUrl;
+                    CONFIG.qwenTts.speaker = CONFIG.qwenTts.defaultSpeaker;
+                    CONFIG.qwenTts.enabled = true;
+                    console.log('[DigitalHuman] QwenTTS手动地址可用:', CONFIG.manualTtsUrl);
+                    return true;
+                }
+            } catch (e) {
+                console.warn('[DigitalHuman] 手动TTS地址连接失败:', CONFIG.manualTtsUrl, e && e.message);
+            }
+        }
+        // 2. 本地配置文件（仅本地开发时可用）
         try {
             const r = await fetch(CONFIG.qwenTts.configUrl + '?_=' + Date.now());
             if (r.ok) {
@@ -456,6 +477,7 @@
                 }
             }
         } catch (e) { /* */ }
+        // 3. 兜底：探测本地 127.0.0.1:8766（仅本地可用）
         try {
             const r = await fetch(CONFIG.qwenTts.fallbackUrl + '/health', { cache: 'no-store' });
             if (r.ok) {
@@ -672,6 +694,11 @@
                     '<span class="dh-item-label">上传参考音频(克隆音色)</span>' +
                     '<input id="dh-ref-input" type="file" accept="audio/*" style="display:none">' +
                 '</button>' +
+                '<button class="dh-panel-item" id="dh-set-tts-url">' +
+                    '<span class="dh-item-icon">\uD83D\uDD17</span>' +
+                    '<span class="dh-item-label">设置TTS服务地址</span>' +
+                    '<span class="dh-item-status" id="dh-tts-url-status">未设置</span>' +
+                '</button>' +
                 '<div class="dh-panel-divider"></div>' +
                 '<button class="dh-panel-item" id="dh-test-voice">' +
                     '<span class="dh-item-icon">\uD83C\uDFA4</span>' +
@@ -809,6 +836,45 @@
             } finally {
                 e.target.value = '';
             }
+        });
+
+        // 设置 TTS 服务地址（内网穿透公网地址）
+        const urlStatusEl = document.getElementById('dh-tts-url-status');
+        if (CONFIG.manualTtsUrl) {
+            urlStatusEl.textContent = '已设置';
+            urlStatusEl.style.color = '#34d399';
+        }
+        document.getElementById('dh-set-tts-url').addEventListener('click', async function () {
+            const current = CONFIG.manualTtsUrl || '';
+            const hint = current
+                ? '当前地址：' + current + '\n输入新地址（留空则清除）。\n格式：https://xxxx.cpolar.io 或 https://xxxx.ngrok-free.app'
+                : '请输入内网穿透后的公网地址\n格式：https://xxxx.cpolar.io 或 https://xxxx.ngrok-free.app';
+            const input = prompt(hint, current);
+            if (input === null) return;  // 用户取消
+            const url = input.trim().replace(/\/+$/, '');  // 去掉末尾斜杠
+            try { localStorage.setItem('dh_manual_tts_url', url); } catch (e) { /* */ }
+            CONFIG.manualTtsUrl = url;
+            if (url) {
+                urlStatusEl.textContent = '连接中...';
+                urlStatusEl.style.color = '#fbbf24';
+                showBubble('正在连接 ' + url + ' ...', 3000);
+                const ok = await loadTtsConfig();
+                if (ok && CONFIG.qwenTts.serverUrl === url) {
+                    urlStatusEl.textContent = '已连接';
+                    urlStatusEl.style.color = '#34d399';
+                    showBubble('TTS 服务连接成功！音色：' + (CONFIG.qwenTts.speaker || '默认'), 3000);
+                } else {
+                    urlStatusEl.textContent = '连接失败';
+                    urlStatusEl.style.color = '#ef4444';
+                    showBubble('连接失败，请检查地址是否正确、服务是否在运行', 4000);
+                }
+            } else {
+                urlStatusEl.textContent = '未设置';
+                urlStatusEl.style.color = '#a78bfa';
+                CONFIG.qwenTts.enabled = false;
+                showBubble('已清除自定义TTS地址，回退系统语音', 2500);
+            }
+            updateEngineStatusUI();
         });
 
         updateEngineStatusUI();
