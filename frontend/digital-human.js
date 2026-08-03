@@ -949,10 +949,14 @@
         return true;
     }
 
+    // 标记当前 speak 会话，防止旧会话的 abort 回退到 WebSpeech
+    let speakSessionId = 0;
+
     async function speak(text, options) {
         options = options || {};
         if (!CONFIG.ttsEnabled) return;
         stopSpeaking();
+        var mySession = ++speakSessionId;
         const clean = cleanAIMessageText(text);
         if (isBlacklisted(clean)) return;
         const final = clean.length > 300 ? clean.slice(0, 300) + '\u2026\u2026' : clean;
@@ -969,9 +973,22 @@
                 if (ok) return;
             }
         } catch (e) {
+            // 被新的 speak 调用 abort 的，不要回退 WebSpeech（否则会用系统音色抢播）
+            if (e && (e.name === 'AbortError' || /abort/i.test(e.message || ''))) {
+                console.log('[DigitalHuman] QwenTTS被abort（被新speak取代），不回退');
+                return;
+            }
+            // 会话已被取代，不要回退
+            if (mySession !== speakSessionId) {
+                console.log('[DigitalHuman] 会话已过期，不回退WebSpeech');
+                return;
+            }
             console.warn('[DigitalHuman] QwenTTS失败，回退WebSpeech:', (e && e.message) || e);
         }
-        speakWithWebSpeech(final);
+        // 仅当前会话仍然是最新的才回退 WebSpeech
+        if (mySession === speakSessionId) {
+            speakWithWebSpeech(final);
+        }
     }
 
     function stopSpeaking() {
@@ -1334,13 +1351,13 @@
             el.__lastSig = sig;
             if (lastSig === sig && sig && text && text.length > 2) {
                 textStableTimers.delete(key);
-                speak(text);
+                speak(text, { force: true });  // AI消息用 force 绕过签名（每条消息都应该朗读）
             } else {
-                const t = setTimeout(run, 1500);
+                const t = setTimeout(run, 600);
                 textStableTimers.set(key, t);
             }
         }
-        const t = setTimeout(run, 1500);
+        const t = setTimeout(run, 600);
         textStableTimers.set(key, t);
     }
 
