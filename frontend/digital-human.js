@@ -803,7 +803,8 @@
                 const r = await fetch(CONFIG.manualTtsUrl + '/health', { cache: 'no-store' });
                 if (r.ok) {
                     CONFIG.qwenTts.serverUrl = CONFIG.manualTtsUrl;
-                    CONFIG.qwenTts.speaker = CONFIG.qwenTts.defaultSpeaker;
+                    try { CONFIG.qwenTts.speaker = localStorage.getItem('dh_qwen_speaker') || CONFIG.qwenTts.defaultSpeaker; }
+                    catch (e) { CONFIG.qwenTts.speaker = CONFIG.qwenTts.defaultSpeaker; }
                     CONFIG.qwenTts.enabled = true;
                     console.log('[DigitalHuman] QwenTTS手动地址可用:', CONFIG.manualTtsUrl);
                     return true;
@@ -819,7 +820,8 @@
                 const c = await r.json();
                 if (c && c.serverUrl) {
                     CONFIG.qwenTts.serverUrl = c.serverUrl;
-                    CONFIG.qwenTts.speaker = c.speaker || CONFIG.qwenTts.defaultSpeaker;
+                    try { CONFIG.qwenTts.speaker = localStorage.getItem('dh_qwen_speaker') || c.speaker || CONFIG.qwenTts.defaultSpeaker; }
+                    catch (e) { CONFIG.qwenTts.speaker = c.speaker || CONFIG.qwenTts.defaultSpeaker; }
                     CONFIG.qwenTts.enabled = true;
                     console.log('[DigitalHuman] QwenTTS后端已发现:', c.serverUrl, '音色=', CONFIG.qwenTts.speaker);
                     return true;
@@ -831,7 +833,8 @@
             const r = await fetch(CONFIG.qwenTts.fallbackUrl + '/health', { cache: 'no-store' });
             if (r.ok) {
                 CONFIG.qwenTts.serverUrl = CONFIG.qwenTts.fallbackUrl;
-                CONFIG.qwenTts.speaker = CONFIG.qwenTts.defaultSpeaker;
+                try { CONFIG.qwenTts.speaker = localStorage.getItem('dh_qwen_speaker') || CONFIG.qwenTts.defaultSpeaker; }
+                catch (e) { CONFIG.qwenTts.speaker = CONFIG.qwenTts.defaultSpeaker; }
                 CONFIG.qwenTts.enabled = true;
                 console.log('[DigitalHuman] QwenTTS兜底端口可用:', CONFIG.qwenTts.fallbackUrl);
                 return true;
@@ -841,27 +844,48 @@
         return false;
     }
 
+    // 分句工具：按中英文标点切分
+    function splitSentences(text) {
+        const parts = text.match(/[^。！？\.\!\?\n；;]+[。！？\.\!\?\n；;]*/g) || [text];
+        return parts.map(function (s) { return s.trim(); }).filter(function (s) { return s.length >= 2; });
+    }
+
     async function speakWithQwenTTS(text) {
         if (!CONFIG.qwenTts.enabled || !CONFIG.qwenTts.serverUrl) return false;
         try { if (CONFIG.qwenTts.lastAbort) CONFIG.qwenTts.lastAbort.abort(); } catch (e) { /* */ }
         const ctrl = new AbortController();
         CONFIG.qwenTts.lastAbort = ctrl;
 
-        const resp = await fetch(CONFIG.qwenTts.serverUrl + '/tts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                text: text,
-                speaker: CONFIG.qwenTts.speaker || CONFIG.qwenTts.defaultSpeaker,
-            }),
-            signal: ctrl.signal,
-        });
-        if (!resp.ok) throw new Error('tts http ' + resp.status);
-        const blob = await resp.blob();
-        if (!blob || blob.size < 100) return false;
+        var speaker = CONFIG.qwenTts.speaker || CONFIG.qwenTts.defaultSpeaker;
 
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
+        // ===== 分句流式播放：第一句合成完立刻播，后续边合成边播 =====
+        var sentences = splitSentences(text);
+        if (!sentences.length) sentences = [text];
+
+        // 请求单句 WAV
+        function fetchSentence(sent) {
+            return fetch(CONFIG.qwenTts.serverUrl + '/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: sent, speaker: speaker }),
+                signal: ctrl.signal,
+            }).then(function (resp) {
+                if (!resp.ok) throw new Error('tts http ' + resp.status);
+                return resp.blob();
+            });
+        }
+
+        // 播放一个 blob
+        function playBlob(blob) {
+            return new Promise(function (resolve, reject) {
+                if (!blob || blob.size < 100) { resolve(); return; }
+                var url = URL.createObjectURL(blob);
+                var audio = new Audio(url);
+                audio.onended = function () { URL.revokeObjectURL(url); resolve(); };
+                audio.onerror = function () { URL.revokeObjectURL(url); reject(new Error('audio play error')); };
+                audio.play().catch(function (e) { URL.revokeObjectURL(url); reject(e); });
+            });
+        }
 
         state = 'talking';
         targetPos = null;
@@ -869,18 +893,29 @@
         showBubble(text.length > 80 ? text.slice(0, 80) + '...' : text, text.length * 120);
         startMouthAnimation();
 
-        await new Promise(function (resolve, reject) {
-            audio.onended = resolve;
-            audio.onerror = function () { reject(new Error('audio play error')); };
-            audio.play().catch(reject);
-        }).then(function () {
-            state = 'idle'; lastActionTime = Date.now(); stopMouthAnimation();
-            setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-        }).catch(function (err) {
-            state = 'idle'; lastActionTime = Date.now(); stopMouthAnimation();
-            setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-            throw err;
-        });
+        // 第一句立刻请求
+        var currentPromise = fetchSentence(sentences[0]);
+        var nextPromise = null;
+
+        for (var i = 0; i < sentences.length; i++) {
+            // 预取下一句（和当前句播放并行）
+            if (i + 1 < sentences.length) {
+                nextPromise = fetchSentence(sentences[i + 1]);
+            }
+            try {
+                var blob = await currentPromise;
+                if (blob && blob.size >= 100) {
+                    await playBlob(blob);
+                }
+            } catch (e) {
+                if (ctrl.signal.aborted) { state = 'idle'; lastActionTime = Date.now(); stopMouthAnimation(); throw e; }
+                console.warn('[DigitalHuman] 第' + i + '句播放失败，跳过:', e);
+            }
+            currentPromise = nextPromise;
+            nextPromise = null;
+        }
+
+        state = 'idle'; lastActionTime = Date.now(); stopMouthAnimation();
         return true;
     }
 
@@ -914,16 +949,19 @@
         return true;
     }
 
-    async function speak(text) {
+    async function speak(text, options) {
+        options = options || {};
         if (!CONFIG.ttsEnabled) return;
         stopSpeaking();
         const clean = cleanAIMessageText(text);
         if (isBlacklisted(clean)) return;
         const final = clean.length > 300 ? clean.slice(0, 300) + '\u2026\u2026' : clean;
-        const sig = textSignature(final);
-        if (spokenSignatures.has(sig)) return;
-        spokenSignatures.add(sig);
-        if (spokenSignatures.size > 200) spokenSignatures.clear();
+        if (!options.force) {
+            const sig = textSignature(final);
+            if (spokenSignatures.has(sig)) return;
+            spokenSignatures.add(sig);
+            if (spokenSignatures.size > 200) spokenSignatures.clear();
+        }
 
         try {
             if (CONFIG.qwenTts.enabled) {
@@ -1152,8 +1190,13 @@
                 const n = parseInt(idx, 10);
                 if (isNaN(n) || n < 0 || n >= list.length) return;
                 CONFIG.qwenTts.speaker = list[n];
+                try { localStorage.setItem('dh_qwen_speaker', list[n]); } catch (e) { /* */ }
                 document.getElementById('dh-voice-status').textContent = list[n];
-                showBubble('已切换音色：' + list[n], 2500);
+                showBubble('已切换音色：' + list[n] + '，试听中...', 2500);
+                // 自动试听（force 绕过防重复签名）
+                setTimeout(function () {
+                    speak('你好呀，我是小智，满意我的音色嘛？', { force: true });
+                }, 400);
             } catch (e) {
                 showBubble('获取音色失败：' + (e && e.message || e), 3000);
             }

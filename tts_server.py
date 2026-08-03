@@ -54,14 +54,13 @@ SPEAKERS_DIR: Optional[Path] = None
 REF_DIR: Optional[Path] = None
 FRONTEND_ASSETS: Optional[Path] = None
 
-# 4 个内置音色 -> Qwen3-TTS 官方预置 speaker name
-# 官方 CustomVoice 9 种： Vivian, Serena, Summer, Eric, Dylan, Ryan, Lily, Tina, Kevin
-# Vivian = 默认女声   Serena = 温柔女声   Summer = 活力女声   Dylan = 沉稳男声
+# 内置音色 -> Qwen3-TTS 官方预置 speaker name（必须全小写！）
+# 官方支持的 9 种：aiden, dylan, eric, ono_anna, ryan, serena, sohee, uncle_fu, vivian
 BUILTIN_MAP: dict[str, str] = {
-    "默认女声": "Vivian",
-    "温柔女声": "Serena",
-    "活力女声": "Summer",
-    "沉稳男声": "Dylan",
+    "默认女声": "vivian",       # 中文女声
+    "温柔女声": "serena",       # 温柔女声
+    "活力女声": "sohee",        # 活力女声（韩语系，也能读中文）
+    "沉稳男声": "dylan",        # 沉稳男声
 }
 BUILTIN_SPEAKERS = list(BUILTIN_MAP.keys())
 cloned_speakers: dict[str, Path] = {}   # name -> wav 路径
@@ -378,11 +377,12 @@ def _synthesize(text: str, speaker_label: Optional[str]) -> Tuple[np.ndarray, in
                         voice=ref_audio,   # 官方用 voice 传参考音频路径
                     )
                 else:
-                    # 官方预置 speaker
+                    # 官方预置 speaker（全小写！）
+                    spk = (builtin_speaker or "vivian").lower()
                     out = MODEL.generate_custom_voice(
                         text=text,
                         language=lang,
-                        speaker=builtin_speaker or "Vivian",
+                        speaker=spk,
                     )
             if isinstance(out, tuple):
                 audio = out[0]
@@ -400,7 +400,30 @@ def _synthesize(text: str, speaker_label: Optional[str]) -> Tuple[np.ndarray, in
             return audio_np, int(sr)
         except Exception as ea:
             print(f"[TTS] generate_custom_voice 异常: {ea}", flush=True)
-            # 继续尝试方法 B
+            # 用默认 vivian 重试一次（防止 speaker 名不匹配）
+            if builtin_speaker and builtin_speaker != "vivian":
+                try:
+                    print("[TTS] 用默认 vivian 重试...", flush=True)
+                    out = MODEL.generate_custom_voice(
+                        text=text,
+                        language=lang,
+                        speaker="vivian",
+                    )
+                    if isinstance(out, tuple):
+                        audio = out[0]
+                        sr = out[1] if len(out) > 1 else 24000
+                    else:
+                        audio = out
+                        sr = 24000
+                    try:
+                        audio_np = audio[0].float().cpu().numpy()
+                    except Exception:
+                        audio_np = np.array(audio, dtype=np.float32)
+                    if audio_np.ndim > 1:
+                        audio_np = audio_np[0]
+                    return audio_np, int(sr)
+                except Exception as ea2:
+                    print(f"[TTS] vivian 重试也失败: {ea2}", flush=True)
 
     # ========== 方法 B：processor + model.generate ==========
     if PROCESSOR is not None:
