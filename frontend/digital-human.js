@@ -344,21 +344,28 @@
                         cm.setParameterValueById('PARAM_BODY_ANGLE_Y', (Math.random() - 0.5) * 3);
                     } catch (e) { /* */ }
                 }
-            } else if (state === 'walking' && targetPos) {
+            } else if ((state === 'walking' || state === 'cruise_walk') && targetPos) {
+                // cruise_walk 和 walking 用同一套移动逻辑
                 const dx = targetPos.x - position.x;
                 const dy = targetPos.y - position.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 if (dist < 5) {
-                    state = 'idle';
-                    lastActionTime = now;
-                    targetPos = null;
-                    if (canvasEl) canvasEl.style.transform = 'scaleX(1)';
+                    if (state === 'walking') {
+                        state = 'idle';
+                        lastActionTime = now;
+                        targetPos = null;
+                        if (canvasEl) canvasEl.style.transform = 'scaleX(1)';
+                    }
+                    // cruise_walk 不在这里改 state，由 runCruiseStop 的 setInterval 负责后续
                 } else {
                     const sp = CONFIG.walkSpeed / 60;
                     position.x += (dx / dist) * sp;
                     position.y += (dy / dist) * sp;
                     const el = canvasEl || fallbackEl;
-                    if (el) el.style.transform = dx < 0 ? 'scaleX(-1)' : 'scaleX(1)';
+                    if (el && state === 'walking') {
+                        el.style.transform = dx < 0 ? 'scaleX(-1)' : 'scaleX(1)';
+                    }
+                    // cruise_walk 的朝向由 runCruiseStop 单独控制，这里不动 transform
                     updatePosition();
                     if (live2dModel) {
                         try {
@@ -370,6 +377,7 @@
                     }
                 }
             }
+            // cruise_talk 状态：原地等待，不做移动，由 runCruiseStop 的 setTimeout 控制后续
             requestAnimationFrame(loop);
         })();
     }

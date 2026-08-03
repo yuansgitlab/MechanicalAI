@@ -68,105 +68,141 @@ cloned_speakers: dict[str, Path] = {}   # name -> wav 路径
 
 
 # ==================== 模型加载 ====================
-def _build_candidate_ids(model_size: str, prefer_modelscope: bool) -> list[str]:
-    """按优先级构造候选 model_id 列表"""
-    tag = "12Hz"          # 必须带这个前缀，否则仓库不存在
-    base = f"Qwen3-TTS-{tag}-{model_size}-CustomVoice"
-    cand = []
-    if prefer_modelscope:
-        # ModelScope 写法：  qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice
-        cand.append(f"qwen/{base}")
-        cand.append(f"qwen/{base.lower()}")
-    # HuggingFace 写法：  Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice
-    cand.append(f"Qwen/{base}")
-    cand.append(f"Qwen/{base.lower()}")
-    # 最后兜底：不带 tag 的旧版（大概率不存在，但保留作兼容）
-    cand.append(f"Qwen/Qwen3-TTS-{model_size}-CustomVoice")
-    return cand
+# ModelScope(魔搭) 正确的 model_id（已验证存在）
+MODELSCOPE_MODEL_ID = "qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
+# HuggingFace 正确的 model_id
+HF_MODEL_ID = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
+
+
+def _download_from_modelscope(model_size: str) -> Optional[str]:
+    """用 modelscope 包的 snapshot_download 下载模型到本地缓存，返回本地路径"""
+    ms_model_id = f"qwen/Qwen3-TTS-12Hz-{model_size}-CustomVoice"
+    print(f"[TTS] 尝试从 ModelScope(魔搭) 下载: {ms_model_id}", flush=True)
+    try:
+        from modelscope import snapshot_download
+        local_path = snapshot_download(ms_model_id)
+        print(f"[TTS] √ ModelScope 下载完成: {local_path}", flush=True)
+        return local_path
+    except ImportError:
+        print("[TTS] modelscope 包未安装，跳过魔搭下载", flush=True)
+        print("[TTS] 安装方法: pip install modelscope", flush=True)
+        return None
+    except Exception as ex:
+        print(f"[TTS] ModelScope 下载失败: {type(ex).__name__}: {ex}", flush=True)
+        return None
+
+
+def _download_from_hf_mirror(model_size: str) -> Optional[str]:
+    """用 hf-mirror.com（国内 HF 镜像）下载"""
+    hf_model_id = f"Qwen/Qwen3-TTS-12Hz-{model_size}-CustomVoice"
+    os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+    print(f"[TTS] 尝试从 HF 镜像(hf-mirror.com) 下载: {hf_model_id}", flush=True)
+    try:
+        from huggingface_hub import snapshot_download as hf_snapshot
+        local_path = hf_snapshot(hf_model_id, trust_remote_code=True)
+        print(f"[TTS] √ HF 镜像下载完成: {local_path}", flush=True)
+        return local_path
+    except Exception as ex:
+        print(f"[TTS] HF 镜像下载失败: {type(ex).__name__}: {ex}", flush=True)
+        return None
+
+
+def _load_from_local_dir(local_path: str) -> bool:
+    """从本地目录加载模型（qwen_tts 优先，transformers 兜底）"""
+    global MODEL, PROCESSOR, MODEL_LOADED, LOAD_ERROR
+    print(f"[TTS] 从本地目录加载模型: {local_path}", flush=True)
+
+    # 方法 1: qwen_tts 官方 SDK
+    try:
+        from qwen_tts import Qwen3TTSModel
+        MODEL = Qwen3TTSModel.from_pretrained(local_path, trust_remote_code=True)
+        MODEL_LOADED = True
+        print(f"[TTS] √ Qwen3TTSModel 加载成功", flush=True)
+        return True
+    except Exception as e1:
+        print(f"[TTS] Qwen3TTSModel 加载失败: {e1}", flush=True)
+
+    # 方法 2: transformers 通用 API
+    try:
+        from transformers import AutoModelForTextToWaveform, AutoProcessor
+        PROCESSOR = AutoProcessor.from_pretrained(local_path, trust_remote_code=True)
+        mdl = AutoModelForTextToWaveform.from_pretrained(
+            local_path, trust_remote_code=True, torch_dtype="auto"
+        )
+        try:
+            import torch
+            if torch.cuda.is_available():
+                mdl = mdl.cuda()
+                print("[TTS] 使用 GPU (CUDA)", flush=True)
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                mdl = mdl.to("mps")
+                print("[TTS] 使用 MPS (Apple Silicon)", flush=True)
+            else:
+                print("[TTS] 使用 CPU 推理", flush=True)
+        except Exception:
+            pass
+        mdl.eval()
+        MODEL = mdl
+        MODEL_LOADED = True
+        print(f"[TTS] √ transformers AutoModel 加载成功", flush=True)
+        return True
+    except Exception as e2:
+        LOAD_ERROR = f"本地加载失败: qwen_tts={e1}; transformers={e2}"
+        print(f"[TTS] {LOAD_ERROR}", flush=True)
+        return False
 
 
 def load_model(model_size: str, prefer_modelscope: bool = True):
+    """模型加载主函数：
+    1. 先用 modelscope 包下载到本地（国内首选）
+    2. 失败 → 用 hf-mirror.com 镜像下载
+    3. 失败 → 直接尝试从 HF 在线加载（可能需要翻墙）
+    4. 都失败 → 打印手动下载指南
+    """
     global MODEL, PROCESSOR, MODEL_LOADED, LOAD_ERROR
     if MODEL_LOADED:
         return
 
-    # ========= 中国用户：把 HF_ENDPOINT 设为魔搭镜像 =========
-    if prefer_modelscope and not os.environ.get("HF_ENDPOINT"):
-        os.environ["HF_ENDPOINT"] = "https://www.modelscope.cn"
-        print("[TTS] HF_ENDPOINT -> https://www.modelscope.cn (国内镜像更快)", flush=True)
-
-    candidates = _build_candidate_ids(model_size, prefer_modelscope)
-    MODEL_ID_CANDIDATES.extend(candidates)
-
-    print(f"[TTS] 开始加载 Qwen3-TTS-{model_size}，候选 model_id:", flush=True)
-    for c in candidates:
-        print(f"       - {c}", flush=True)
-
-    last_err: Optional[Exception] = None
     t0 = time.time()
+    print(f"\n[TTS] ===== 开始加载 Qwen3-TTS-{model_size} =====", flush=True)
 
-    for mid in candidates:
-        try:
-            print(f"\n[TTS] 尝试加载: {mid} ...", flush=True)
+    # ---- 步骤 1: ModelScope 下载 ----
+    local_path: Optional[str] = None
+    if prefer_modelscope:
+        local_path = _download_from_modelscope(model_size)
 
-            # ---- 方法 1: qwen_tts 官方 SDK ----
-            try:
-                from qwen_tts import Qwen3TTSModel
-                # 官方推荐加载方式
-                model_obj = Qwen3TTSModel.from_pretrained(mid, trust_remote_code=True)
-                MODEL = model_obj
-                MODEL_LOADED = True
-                print(f"[TTS] √ Qwen3TTSModel.from_pretrained('{mid}') 成功", flush=True)
-                break
-            except Exception as e1:
-                print(f"      Qwen3TTSModel 失败: {type(e1).__name__}: {e1}", flush=True)
-                # 继续尝试 AutoProcessor / AutoModelForTextToWaveform
+    # ---- 步骤 2: HF 镜像下载 ----
+    if not local_path:
+        local_path = _download_from_hf_mirror(model_size)
 
-            # ---- 方法 2: transformers 通用 API ----
-            from transformers import AutoModelForTextToWaveform, AutoProcessor
-            proc = AutoProcessor.from_pretrained(mid, trust_remote_code=True)
-            mdl = AutoModelForTextToWaveform.from_pretrained(
-                mid,
-                trust_remote_code=True,
-                torch_dtype="auto",
-            )
-            try:
-                import torch
-                if torch.cuda.is_available():
-                    mdl = mdl.cuda()
-                    print("[TTS] 使用 GPU (CUDA)", flush=True)
-                elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                    mdl = mdl.to("mps")
-                    print("[TTS] 使用 MPS (Apple Silicon)", flush=True)
-                else:
-                    print("[TTS] 使用 CPU 推理", flush=True)
-            except Exception:
-                pass
-            mdl.eval()
-            PROCESSOR = proc
-            MODEL = mdl
-            MODEL_LOADED = True
-            print(f"[TTS] √ transformers AutoModel 加载成功: {mid}", flush=True)
-            break
+    # ---- 步骤 3: 从下载好的本地路径加载 ----
+    if local_path:
+        MODEL_ID_CANDIDATES.append(local_path)
+        if _load_from_local_dir(local_path):
+            print(f"[TTS] 总耗时 {time.time()-t0:.1f}s\n", flush=True)
+            return
 
-        except Exception as ex:
-            last_err = ex
-            msg = f"{type(ex).__name__}: {ex}"
-            print(f"      × 失败: {msg[:200]}", flush=True)
-            continue
-
-    if not MODEL_LOADED:
-        if last_err:
-            LOAD_ERROR = f"{type(last_err).__name__}: {last_err}"
-        else:
-            LOAD_ERROR = "所有候选 model_id 加载都失败"
-        print(f"\n[TTS] 模型加载彻底失败: {LOAD_ERROR}", flush=True)
-        print("[TTS] 建议操作:", flush=True)
-        print("      1. 手动从 https://www.modelscope.cn/models/qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice 下载", flush=True)
-        print("      2. 解压到本地目录，启动时加 --model-dir D:/path/to/model", flush=True)
+    # ---- 步骤 4: 最后尝试直接在线加载（不走镜像）----
+    print("[TTS] 尝试直接在线加载（不走镜像）...", flush=True)
+    os.environ.pop("HF_ENDPOINT", None)
+    hf_model_id = f"Qwen/Qwen3-TTS-12Hz-{model_size}-CustomVoice"
+    MODEL_ID_CANDIDATES.append(hf_model_id)
+    if _load_from_local_dir(hf_model_id):
+        print(f"[TTS] 总耗时 {time.time()-t0:.1f}s\n", flush=True)
         return
 
-    print(f"[TTS] 总耗时 {time.time()-t0:.1f}s\n", flush=True)
+    # ---- 全部失败 ----
+    LOAD_ERROR = "所有下载/加载方式都失败"
+    print(f"\n[TTS] 模型加载彻底失败: {LOAD_ERROR}", flush=True)
+    print("=" * 60, flush=True)
+    print("[TTS] 手动下载指南:", flush=True)
+    print(f"  1. 浏览器打开: https://www.modelscope.cn/models/qwen/Qwen3-TTS-12Hz-{model_size}-CustomVoice/files", flush=True)
+    print("  2. 下载全部文件到本地目录，例如 D:/Qwen3-TTS", flush=True)
+    print("  3. 启动时指定本地目录:", flush=True)
+    print(f"     python tts_server.py --model-dir D:/Qwen3-TTS", flush=True)
+    print("  或者安装 modelscope 包后重试:", flush=True)
+    print("     pip install modelscope", flush=True)
+    print("=" * 60, flush=True)
 
 
 def load_model_from_local(local_dir: str):

@@ -2,5 +2,11 @@
   "serverUrl": "http://127.0.0.1:8766",
   "speaker": "默认女声",
   "model_size": "0.6B",
-  "updated_at": "2026-08-02 02:15:25"
+  "builtin_speaker_map": {
+    "默认女声": "Vivian",
+    "温柔女声": "Serena",
+    "活力女声": "Summer",
+    "沉稳男声": "Dylan"
+  },
+  "updated_at": "2026-08-03 13:40:58"
 }
